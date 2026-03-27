@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '@devmaxx/db';
+import { db } from '../lib/db';
 import { PlayerSupportAgent } from '../agents/player-support';
 
 export const supportRouter = Router();

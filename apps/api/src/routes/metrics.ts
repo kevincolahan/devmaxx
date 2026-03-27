@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '@devmaxx/db';
+import { db } from '../lib/db';
 import { MetricsMonitorAgent } from '../agents/metrics-monitor';
 
 export const metricsRouter = Router();

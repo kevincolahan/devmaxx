@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '@devmaxx/db';
+import { db } from '../lib/db';
 import { CompetitorIntelligenceAgent } from '../agents/competitor-intel';
 
 export const competitorRouter = Router();

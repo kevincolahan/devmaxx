@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(curl:*)",
+      "Bash(npx prisma:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(npm run:*)",
+      "Bash(ls -la /c/Users/kevin/devmaxx/apps/api/infra/n8n/pricing-*.json /c/Users/kevin/devmaxx/apps/api/infra/n8n/monetization-*.json)",
+      "Bash(ls /c/Users/kevin/devmaxx/apps/web/.env*)",
+      "Bash(git add:*)",
+      "Bash(git reset:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(npx tsc:*)"
+    ]
+  }
+}

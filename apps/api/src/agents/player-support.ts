@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { BaseAgent, AgentContext, AgentResult } from '@devmaxx/agent-core';
+import { BaseAgent, AgentContext, AgentResult } from '../lib/base-agent';
 
 type Category = 'bug' | 'refund' | 'how-to' | 'feature' | 'toxic' | 'positive';
 
@@ -165,7 +165,7 @@ escalationReason: only when autoResolvable is false and needs human review`;
     };
 
     const result = await this.run(context);
-    const output = result.output as ClassificationOutput;
+    const output = result.output as unknown as ClassificationOutput;
 
     const ticket = await db.supportTicket.create({
       data: {

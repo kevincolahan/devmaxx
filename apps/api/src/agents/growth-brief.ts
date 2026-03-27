@@ -1,5 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { BaseAgent, AgentContext, AgentResult } from '@devmaxx/agent-core';
+import { BaseAgent, AgentContext, AgentResult } from '../lib/base-agent';
 import { Resend } from 'resend';
 
 interface BriefSection {

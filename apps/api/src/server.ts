@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { db } from '@devmaxx/db';
+import { db } from './lib/db';
 import { healthRouter } from './routes/health';
 import { agentRouter } from './routes/agents';
 import { metricsRouter } from './routes/metrics';

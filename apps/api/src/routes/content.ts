@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '@devmaxx/db';
+import { db } from '../lib/db';
 import { ContentGenerationAgent } from '../agents/content-gen';
 
 export const contentRouter = Router();

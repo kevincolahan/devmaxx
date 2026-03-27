@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '@devmaxx/db';
+import { db } from '../lib/db';
 import { PricingTestCreatorAgent, PricingTestEvaluatorAgent } from '../agents/pricing-opt';
 
 export const pricingRouter = Router();

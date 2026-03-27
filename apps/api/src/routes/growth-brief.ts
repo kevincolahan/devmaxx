@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { db } from '@devmaxx/db';
+import { db } from '../lib/db';
 import { GrowthBriefAgent } from '../agents/growth-brief';
 
 export const growthBriefRouter = Router();
