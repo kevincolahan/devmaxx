@@ -15,6 +15,7 @@
     "db:migrate": "npx prisma migrate dev --schema=packages/db/schema.prisma",
     "db:studio": "npx prisma studio --schema=packages/db/schema.prisma"
   },
+  "packageManager": "npm@10.2.4",
   "engines": {
     "node": ">=18.0.0"
   },
