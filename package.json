@@ -1,0 +1,24 @@
+{
+  "name": "devmaxx",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "build:web": "npm run build --workspace=apps/web",
+    "build:api": "npm run build --workspace=apps/api",
+    "db:generate": "npx prisma generate --schema=packages/db/schema.prisma",
+    "db:push": "npx prisma db push --schema=packages/db/schema.prisma",
+    "db:migrate": "npx prisma migrate dev --schema=packages/db/schema.prisma",
+    "db:studio": "npx prisma studio --schema=packages/db/schema.prisma"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0"
+  }
+}

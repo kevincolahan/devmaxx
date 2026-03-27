@@ -1,0 +1,16 @@
+{
+  "name": "@devmaxx/agent-core",
+  "version": "0.0.1",
+  "private": true,
+  "main": "src/base-agent.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@devmaxx/db": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}
