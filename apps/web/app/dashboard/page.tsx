@@ -86,6 +86,7 @@ export default async function DashboardPage() {
           robloxUserId: creator.robloxUserId,
           robloxUsername: creator.robloxUsername,
           robloxDisplayName: creator.robloxDisplayName,
+          hasApiKey: !!creator.robloxApiKey,
         }
       : null,
     games: (creator?.games ?? []).map((game) => ({

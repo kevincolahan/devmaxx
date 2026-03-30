@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
       grant_type: 'authorization_code',
       code,
       redirect_uri: redirectUri,
-      client_id: process.env.ROBLOX_OAUTH_CLIENT_ID!,
+      client_id: process.env.ROBLOX_OAUTH_CLIENT_ID ?? '7693506342195446653',
       client_secret: process.env.ROBLOX_OAUTH_CLIENT_SECRET!,
     }),
   });
@@ -96,101 +96,13 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  if (robloxUserId) {
-    try {
-      await discoverAndCreateGames(session.user.email, robloxUserId, tokenData.access_token);
-    } catch (err) {
-      console.error('Game discovery failed:', err);
-    }
-  }
-
-  return NextResponse.redirect(new URL('/dashboard?roblox=connected', baseUrl));
-}
-
-async function discoverAndCreateGames(
-  creatorEmail: string,
-  robloxUserId: string,
-  accessToken: string
-) {
-  const creator = await db.creator.findUniqueOrThrow({
-    where: { email: creatorEmail },
-    include: { games: true },
+  const creator = await db.creator.findUnique({
+    where: { email: session.user.email },
   });
 
-  const existingGameIds = new Set(creator.games.map((g) => g.robloxGameId));
-
-  const gamesRes = await fetch(
-    `https://games.roblox.com/v2/users/${robloxUserId}/games?sortOrder=Desc&limit=50`,
-    {
-      headers: {
-        Accept: 'application/json',
-      },
-    }
-  );
-
-  if (!gamesRes.ok) {
-    const universeRes = await fetch(
-      `https://apis.roblox.com/cloud/v2/users/${robloxUserId}/universes?maxPageSize=50`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      }
-    );
-
-    if (!universeRes.ok) {
-      console.error('Both game discovery methods failed');
-      return;
-    }
-
-    const universeData = (await universeRes.json()) as {
-      universes?: Array<{
-        path: string;
-        displayName: string;
-        description?: string;
-      }>;
-    };
-
-    for (const universe of universeData.universes ?? []) {
-      const universeId = universe.path.split('/').pop() ?? '';
-      if (!universeId || existingGameIds.has(universeId)) continue;
-
-      await db.game.create({
-        data: {
-          creatorId: creator.id,
-          robloxGameId: universeId,
-          name: universe.displayName || `Game ${universeId}`,
-          genre: [],
-          healthScore: 50,
-          competitors: [],
-        },
-      });
-    }
-
-    return;
+  if (creator?.robloxApiKey) {
+    return NextResponse.redirect(new URL('/dashboard?roblox=connected', baseUrl));
   }
 
-  const gamesData = (await gamesRes.json()) as {
-    data?: Array<{
-      id: number;
-      name: string;
-      description?: string;
-      rootPlace?: { id: number };
-      creator?: { type: string };
-    }>;
-  };
-
-  for (const game of gamesData.data ?? []) {
-    const gameId = String(game.id);
-    if (existingGameIds.has(gameId)) continue;
-
-    await db.game.create({
-      data: {
-        creatorId: creator.id,
-        robloxGameId: gameId,
-        name: game.name || `Game ${gameId}`,
-        genre: [],
-        healthScore: 50,
-        competitors: [],
-      },
-    });
-  }
+  return NextResponse.redirect(new URL('/onboarding?step=apikey', baseUrl));
 }

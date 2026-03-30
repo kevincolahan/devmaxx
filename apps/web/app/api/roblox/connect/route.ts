@@ -33,10 +33,10 @@ export async function GET() {
   });
 
   const params = new URLSearchParams({
-    client_id: process.env.ROBLOX_OAUTH_CLIENT_ID!,
+    client_id: process.env.ROBLOX_OAUTH_CLIENT_ID ?? '7693506342195446653',
     redirect_uri: `${process.env.NEXTAUTH_URL ?? 'http://localhost:3000'}/api/roblox/callback`,
     response_type: 'code',
-    scope: 'openid profile universe.place:read universe.analyticsservice:read universe.datastoreservice:read economy:read economy:write',
+    scope: 'openid profile',
     state,
   });
 

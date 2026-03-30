@@ -101,6 +101,7 @@ interface DashboardData {
     robloxUserId: string | null;
     robloxUsername: string | null;
     robloxDisplayName: string | null;
+    hasApiKey: boolean;
   } | null;
   games: Game[];
   recentRuns: AgentRun[];
@@ -182,6 +183,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
           robloxUserId={creator?.robloxUserId ?? null}
           robloxUsername={creator?.robloxUsername ?? null}
           robloxDisplayName={creator?.robloxDisplayName ?? null}
+          hasApiKey={creator?.hasApiKey ?? false}
         />
         {creator && (
           <AutopilotToggle
