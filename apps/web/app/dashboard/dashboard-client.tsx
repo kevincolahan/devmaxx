@@ -265,7 +265,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
       {activeTab === 'brief' && (
         <div className="mt-8">
           <GrowthBriefPreview
-            brief={lastBrief?.data as Parameters<typeof GrowthBriefPreview>[0]['brief']}
+            brief={lastBrief?.data as any}
             sentAt={lastBrief?.sentAt ?? null}
           />
         </div>
