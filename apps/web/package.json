@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate --schema=../../packages/db/schema.prisma && next build",
     "start": "next start",
     "lint": "next lint"
   },
@@ -18,7 +18,8 @@
     "stripe": "^17.3.1",
     "recharts": "^2.13.3",
     "@devmaxx/db": "*",
-    "@react-email/components": "^0.0.22"
+    "@react-email/components": "^0.0.22",
+    "prisma": "5.22.0"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
