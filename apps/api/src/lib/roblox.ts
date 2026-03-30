@@ -3,12 +3,6 @@ import { PrismaClient } from '@prisma/client';
 const ROBLOX_BASE = 'https://apis.roblox.com';
 const ROBLOX_AUTH = 'https://apis.roblox.com/oauth/v1/token';
 
-interface TokenPair {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-}
-
 interface RobloxMetrics {
   dau: number;
   mau: number;
@@ -38,14 +32,15 @@ export async function refreshAccessToken(
     where: { id: creatorId },
   });
 
-  const stored = (creator as Record<string, unknown>).robloxTokens as TokenPair | null;
-
-  if (!stored) {
-    throw new Error(`No Roblox tokens stored for creator ${creatorId}`);
+  if (!creator.robloxAccessToken || !creator.robloxRefreshToken) {
+    throw new Error(`No Roblox tokens stored for creator ${creatorId}. User must connect Roblox first.`);
   }
 
-  if (stored.expiresAt > Date.now() + 60_000) {
-    return stored.accessToken;
+  const expiresAt = creator.robloxTokenExpiresAt?.getTime() ?? 0;
+  const fiveMinutesFromNow = Date.now() + 5 * 60 * 1000;
+
+  if (expiresAt > fiveMinutesFromNow) {
+    return creator.robloxAccessToken;
   }
 
   const res = await fetch(ROBLOX_AUTH, {
@@ -53,7 +48,7 @@ export async function refreshAccessToken(
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
-      refresh_token: stored.refreshToken,
+      refresh_token: creator.robloxRefreshToken,
       client_id: process.env.ROBLOX_OAUTH_CLIENT_ID!,
       client_secret: process.env.ROBLOX_OAUTH_CLIENT_SECRET!,
     }),
@@ -70,18 +65,18 @@ export async function refreshAccessToken(
     expires_in: number;
   };
 
-  const newTokens: TokenPair = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
-  };
+  const newExpiresAt = new Date(Date.now() + data.expires_in * 1000);
 
-  await (db as Record<string, unknown> & PrismaClient).creator.update({
+  await db.creator.update({
     where: { id: creatorId },
-    data: { robloxUserId: creator.robloxUserId },
+    data: {
+      robloxAccessToken: data.access_token,
+      robloxRefreshToken: data.refresh_token,
+      robloxTokenExpiresAt: newExpiresAt,
+    },
   });
 
-  return newTokens.accessToken;
+  return data.access_token;
 }
 
 export async function fetchGameAnalytics(

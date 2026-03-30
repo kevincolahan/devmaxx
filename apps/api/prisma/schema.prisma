@@ -52,16 +52,21 @@ model VerificationToken {
 }
 
 model Creator {
-  id           String     @id @default(cuid())
-  email        String     @unique
-  robloxUserId String?
-  stripeId     String?
-  plan         String     @default("free")
-  autopilot    Boolean    @default(false)
-  timezone     String     @default("UTC")
-  games        Game[]
-  agentRuns    AgentRun[]
-  createdAt    DateTime   @default(now())
+  id                   String     @id @default(cuid())
+  email                String     @unique
+  robloxUserId         String?
+  robloxUsername        String?
+  robloxDisplayName    String?
+  robloxAccessToken    String?    @db.Text
+  robloxRefreshToken   String?    @db.Text
+  robloxTokenExpiresAt DateTime?
+  stripeId             String?
+  plan                 String     @default("free")
+  autopilot            Boolean    @default(false)
+  timezone             String     @default("UTC")
+  games                Game[]
+  agentRuns            AgentRun[]
+  createdAt            DateTime   @default(now())
 }
 
 model Game {

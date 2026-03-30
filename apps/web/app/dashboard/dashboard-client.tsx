@@ -99,6 +99,8 @@ interface DashboardData {
     plan: string;
     autopilot: boolean;
     robloxUserId: string | null;
+    robloxUsername: string | null;
+    robloxDisplayName: string | null;
   } | null;
   games: Game[];
   recentRuns: AgentRun[];
@@ -178,6 +180,8 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
         <ConnectRobloxButton
           isConnected={!!creator?.robloxUserId}
           robloxUserId={creator?.robloxUserId ?? null}
+          robloxUsername={creator?.robloxUsername ?? null}
+          robloxDisplayName={creator?.robloxDisplayName ?? null}
         />
         {creator && (
           <AutopilotToggle
