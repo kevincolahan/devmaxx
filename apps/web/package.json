@@ -17,7 +17,8 @@
     "resend": "^4.0.1",
     "stripe": "^17.3.1",
     "recharts": "^2.13.3",
-    "@devmaxx/db": "*"
+    "@devmaxx/db": "*",
+    "@react-email/components": "^0.0.22"
   },
   "devDependencies": {
     "typescript": "^5.3.3",
