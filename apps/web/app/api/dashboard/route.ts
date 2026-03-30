@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db';
+import type { Game, MetricSnapshot, AgentRun } from '@prisma/client';
 
 export async function GET() {
   const session = await auth();
@@ -54,14 +55,14 @@ export async function GET() {
       autopilot: creator.autopilot,
       robloxUserId: creator.robloxUserId,
     },
-    games: creator.games.map((game) => ({
+    games: creator.games.map((game: Game & { snapshots: MetricSnapshot[] }) => ({
       id: game.id,
       name: game.name,
       robloxGameId: game.robloxGameId,
       healthScore: game.healthScore,
       genre: game.genre,
       competitors: game.competitors,
-      snapshots: game.snapshots.map((s) => ({
+      snapshots: game.snapshots.map((s: MetricSnapshot) => ({
         date: s.date,
         dau: s.dau,
         mau: s.mau,
@@ -75,7 +76,7 @@ export async function GET() {
         returningPlayers: s.returningPlayers,
       })),
     })),
-    recentRuns: creator.agentRuns.map((run) => ({
+    recentRuns: creator.agentRuns.map((run: AgentRun) => ({
       id: run.id,
       agentName: run.agentName,
       action: run.action,
