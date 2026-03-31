@@ -10,6 +10,7 @@ import { monetizationRouter } from './routes/monetization';
 import { supportRouter } from './routes/support';
 import { contentRouter } from './routes/content';
 import { growthBriefRouter } from './routes/growth-brief';
+import { startScheduler } from './cron/scheduler';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -29,6 +30,7 @@ app.use('/api/growth-brief', growthBriefRouter);
 
 app.listen(PORT, () => {
   console.log(`Devmaxx API running on port ${PORT}`);
+  startScheduler();
 });
 
 export { app, db };
