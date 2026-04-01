@@ -3,6 +3,35 @@ import { PrismaClient } from '@prisma/client';
 const ROBLOX_BASE = 'https://apis.roblox.com';
 const ROBLOX_AUTH = 'https://apis.roblox.com/oauth/v1/token';
 
+// ─── Timeout-aware fetch ─────────────────────────────────────
+
+const FETCH_TIMEOUT_MS = 10_000; // 10 seconds
+
+async function fetchWithTimeout(
+  url: string,
+  init?: RequestInit
+): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+    return response;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`Roblox API timeout after ${FETCH_TIMEOUT_MS}ms: ${url}`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ─── Types ───────────────────────────────────────────────────
+
 interface RobloxMetrics {
   dau: number;
   mau: number;
@@ -24,6 +53,8 @@ interface CompetitorMetrics {
   name: string;
 }
 
+// ─── Token Refresh ───────────────────────────────────────────
+
 export async function refreshAccessToken(
   creatorId: string,
   db: PrismaClient
@@ -43,7 +74,7 @@ export async function refreshAccessToken(
     return creator.robloxAccessToken;
   }
 
-  const res = await fetch(ROBLOX_AUTH, {
+  const res = await fetchWithTimeout(ROBLOX_AUTH, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
@@ -79,6 +110,8 @@ export async function refreshAccessToken(
   return data.access_token;
 }
 
+// ─── Analytics ───────────────────────────────────────────────
+
 export async function fetchGameAnalytics(
   universeId: string,
   accessToken: string,
@@ -90,9 +123,9 @@ export async function fetchGameAnalytics(
   const analyticsUrl = `${ROBLOX_BASE}/cloud/v2/universes/${universeId}/analytics-service/v1/metrics`;
 
   const [dauRes, revenueRes, retentionRes] = await Promise.all([
-    fetch(`${analyticsUrl}?metric=DAU&startDate=${startDate}&endDate=${endDate}`, { headers }),
-    fetch(`${analyticsUrl}?metric=Revenue&startDate=${startDate}&endDate=${endDate}`, { headers }),
-    fetch(`${analyticsUrl}?metric=Retention&startDate=${startDate}&endDate=${endDate}`, { headers }),
+    fetchWithTimeout(`${analyticsUrl}?metric=DAU&startDate=${startDate}&endDate=${endDate}`, { headers }),
+    fetchWithTimeout(`${analyticsUrl}?metric=Revenue&startDate=${startDate}&endDate=${endDate}`, { headers }),
+    fetchWithTimeout(`${analyticsUrl}?metric=Retention&startDate=${startDate}&endDate=${endDate}`, { headers }),
   ]);
 
   if (!dauRes.ok || !revenueRes.ok || !retentionRes.ok) {
@@ -121,7 +154,7 @@ export async function fetchGameAnalytics(
   const retD7 = extractMetricValues(retentionData, 'D7Retention');
   const retD30 = extractMetricValues(retentionData, 'D30Retention');
 
-  const itemsRes = await fetch(
+  const itemsRes = await fetchWithTimeout(
     `${ROBLOX_BASE}/cloud/v2/universes/${universeId}/economy/developer-products?maxPageSize=10`,
     { headers }
   );
@@ -134,7 +167,7 @@ export async function fetchGameAnalytics(
     topItems[item.displayName] = item.priceInRobux;
   }
 
-  const visitSourcesRes = await fetch(
+  const visitSourcesRes = await fetchWithTimeout(
     `${analyticsUrl}?metric=VisitSources&startDate=${startDate}&endDate=${endDate}`,
     { headers }
   );
@@ -159,13 +192,15 @@ export async function fetchGameAnalytics(
   };
 }
 
+// ─── Competitor Data ─────────────────────────────────────────
+
 export async function fetchCompetitorData(
   universeId: string,
   apiKey: string
 ): Promise<CompetitorMetrics> {
   const headers = { 'x-api-key': apiKey };
 
-  const gameRes = await fetch(
+  const gameRes = await fetchWithTimeout(
     `${ROBLOX_BASE}/cloud/v2/universes/${universeId}`,
     { headers }
   );
@@ -183,7 +218,7 @@ export async function fetchCompetitorData(
   const name = gameData.displayName ?? `Universe ${universeId}`;
   const concurrent = gameData.playing ?? 0;
 
-  const votesRes = await fetch(
+  const votesRes = await fetchWithTimeout(
     `${ROBLOX_BASE}/cloud/v2/universes/${universeId}/votes`,
     { headers }
   );
@@ -197,6 +232,8 @@ export async function fetchCompetitorData(
 
   return { concurrent, rating, name };
 }
+
+// ─── Products & Game Passes ──────────────────────────────────
 
 export interface DeveloperProduct {
   id: string;
@@ -227,7 +264,7 @@ export async function fetchDeveloperProducts(
     url.searchParams.set('maxPageSize', '100');
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-    const res = await fetch(url.toString(), { headers });
+    const res = await fetchWithTimeout(url.toString(), { headers });
     if (!res.ok) {
       throw new Error(`Failed to fetch developer products: ${res.status}`);
     }
@@ -252,7 +289,7 @@ export async function fetchGamePasses(
 ): Promise<GamePass[]> {
   const headers = { Authorization: `Bearer ${accessToken}` };
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${ROBLOX_BASE}/cloud/v2/universes/${universeId}/game-passes?maxPageSize=100`,
     { headers }
   );
@@ -279,7 +316,7 @@ export async function updateProductPrice(
     'Content-Type': 'application/json',
   };
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${ROBLOX_BASE}/cloud/v2/universes/${universeId}/economy/developer-products/${productId}`,
     {
       method: 'PATCH',
@@ -293,6 +330,8 @@ export async function updateProductPrice(
     throw new Error(`Failed to update product price: ${res.status} — ${text}`);
   }
 }
+
+// ─── Helpers ─────────────────────────────────────────────────
 
 function extractMetricValues(data: Record<string, unknown>, metric: string): number[] {
   const dataPoints = (data as Record<string, unknown[]>).dataPoints ?? [];
