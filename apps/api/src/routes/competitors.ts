@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/db';
 import { CompetitorIntelligenceAgent } from '../agents/competitor-intel';
+import { withTimeout, AGENT_RUN_TIMEOUT_MS } from '../lib/timeout';
 
 export const competitorRouter = Router();
 
@@ -29,15 +30,19 @@ competitorRouter.post('/run', async (req, res) => {
   const agent = new CompetitorIntelligenceAgent();
 
   try {
-    const result = await agent.runFullPipeline(
-      creatorId,
-      gameId,
-      {
-        watchingGameId: gameId,
-        watchingGameName: game.name,
-        competitorUniverseIds: game.competitors,
-      },
-      db
+    const result = await withTimeout(
+      agent.runFullPipeline(
+        creatorId,
+        gameId,
+        {
+          watchingGameId: gameId,
+          watchingGameName: game.name,
+          competitorUniverseIds: game.competitors,
+        },
+        db
+      ),
+      AGENT_RUN_TIMEOUT_MS,
+      `CompetitorIntel:${game.name}`
     );
 
     res.json({ success: true, result });
@@ -56,25 +61,29 @@ competitorRouter.post('/run-all', async (_req, res) => {
     include: { creator: true },
   });
 
-  const results: Array<{ gameId: string; status: string }> = [];
+  const results: Array<{ gameId: string; status: string; error?: string }> = [];
 
   for (const game of games) {
     const agent = new CompetitorIntelligenceAgent();
     try {
-      await agent.runFullPipeline(
-        game.creatorId,
-        game.id,
-        {
-          watchingGameId: game.id,
-          watchingGameName: game.name,
-          competitorUniverseIds: game.competitors,
-        },
-        db
+      await withTimeout(
+        agent.runFullPipeline(
+          game.creatorId,
+          game.id,
+          {
+            watchingGameId: game.id,
+            watchingGameName: game.name,
+            competitorUniverseIds: game.competitors,
+          },
+          db
+        ),
+        AGENT_RUN_TIMEOUT_MS,
+        `CompetitorIntel:${game.name}`
       );
       results.push({ gameId: game.id, status: 'success' });
     } catch (err) {
       console.error(`Competitor intel failed for game ${game.id}:`, err);
-      results.push({ gameId: game.id, status: 'failed' });
+      results.push({ gameId: game.id, status: 'failed', error: String(err) });
     }
   }
 

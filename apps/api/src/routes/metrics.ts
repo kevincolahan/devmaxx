@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/db';
 import { MetricsMonitorAgent } from '../agents/metrics-monitor';
+import { withTimeout, AGENT_RUN_TIMEOUT_MS } from '../lib/timeout';
 
 export const metricsRouter = Router();
 
@@ -24,15 +25,19 @@ metricsRouter.post('/run', async (req, res) => {
   const agent = new MetricsMonitorAgent();
 
   try {
-    const result = await agent.runFullPipeline(
-      creatorId,
-      gameId,
-      {
-        robloxGameId: game.robloxGameId,
-        universeId: game.robloxGameId,
-        gameName: game.name,
-      },
-      db
+    const result = await withTimeout(
+      agent.runFullPipeline(
+        creatorId,
+        gameId,
+        {
+          robloxGameId: game.robloxGameId,
+          universeId: game.robloxGameId,
+          gameName: game.name,
+        },
+        db
+      ),
+      AGENT_RUN_TIMEOUT_MS,
+      `MetricsMonitor:${game.name}`
     );
 
     res.json({ success: true, result });
@@ -48,26 +53,30 @@ metricsRouter.post('/run-all', async (_req, res) => {
     include: { games: true },
   });
 
-  const results: Array<{ gameId: string; status: string }> = [];
+  const results: Array<{ gameId: string; status: string; error?: string }> = [];
 
   for (const creator of creators) {
     for (const game of creator.games) {
       const agent = new MetricsMonitorAgent();
       try {
-        await agent.runFullPipeline(
-          creator.id,
-          game.id,
-          {
-            robloxGameId: game.robloxGameId,
-            universeId: game.robloxGameId,
-            gameName: game.name,
-          },
-          db
+        await withTimeout(
+          agent.runFullPipeline(
+            creator.id,
+            game.id,
+            {
+              robloxGameId: game.robloxGameId,
+              universeId: game.robloxGameId,
+              gameName: game.name,
+            },
+            db
+          ),
+          AGENT_RUN_TIMEOUT_MS,
+          `MetricsMonitor:${game.name}`
         );
         results.push({ gameId: game.id, status: 'success' });
       } catch (err) {
         console.error(`Metrics failed for game ${game.id}:`, err);
-        results.push({ gameId: game.id, status: 'failed' });
+        results.push({ gameId: game.id, status: 'failed', error: String(err) });
       }
     }
   }

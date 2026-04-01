@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { db } from '../lib/db';
 import { ContentGenerationAgent } from '../agents/content-gen';
 import { postTweet } from '../lib/twitter';
+import { withTimeout, AGENT_RUN_TIMEOUT_MS } from '../lib/timeout';
 
 export const contentRouter = Router();
 
@@ -14,7 +15,11 @@ contentRouter.post('/generate', async (req, res) => {
   if (creatorId && gameId) {
     const agent = new ContentGenerationAgent();
     try {
-      const result = await agent.runFullPipeline(creatorId, gameId, db);
+      const result = await withTimeout(
+        agent.runFullPipeline(creatorId, gameId, db),
+        AGENT_RUN_TIMEOUT_MS,
+        `ContentGeneration:${gameId}`
+      );
       res.json({ success: true, result });
     } catch (err) {
       console.error('ContentGenerationAgent failed:', err);
@@ -28,17 +33,21 @@ contentRouter.post('/generate', async (req, res) => {
     include: { games: true },
   });
 
-  const results: Array<{ gameId: string; status: string }> = [];
+  const results: Array<{ gameId: string; status: string; error?: string }> = [];
 
   for (const creator of creators) {
     for (const game of creator.games) {
       const agent = new ContentGenerationAgent();
       try {
-        await agent.runFullPipeline(creator.id, game.id, db);
+        await withTimeout(
+          agent.runFullPipeline(creator.id, game.id, db),
+          AGENT_RUN_TIMEOUT_MS,
+          `ContentGeneration:${game.name}`
+        );
         results.push({ gameId: game.id, status: 'success' });
       } catch (err) {
         console.error(`Content gen failed for game ${game.id}:`, err);
-        results.push({ gameId: game.id, status: 'failed' });
+        results.push({ gameId: game.id, status: 'failed', error: String(err) });
       }
     }
   }
@@ -74,7 +83,11 @@ contentRouter.post('/post-to-x', async (req, res) => {
   }
 
   try {
-    const result = await postTweet(piece.content);
+    const result = await withTimeout(
+      postTweet(piece.content),
+      AGENT_RUN_TIMEOUT_MS,
+      `PostToX:${contentPieceId}`
+    );
 
     if (!result.success) {
       res.status(502).json({ error: result.error });

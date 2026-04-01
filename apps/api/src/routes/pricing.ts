@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/db';
 import { PricingTestCreatorAgent, PricingTestEvaluatorAgent } from '../agents/pricing-opt';
+import { withTimeout, AGENT_RUN_TIMEOUT_MS } from '../lib/timeout';
 
 export const pricingRouter = Router();
 
@@ -24,7 +25,11 @@ pricingRouter.post('/create-tests', async (req, res) => {
   const agent = new PricingTestCreatorAgent();
 
   try {
-    const result = await agent.runFullPipeline(creatorId, gameId, db);
+    const result = await withTimeout(
+      agent.runFullPipeline(creatorId, gameId, db),
+      AGENT_RUN_TIMEOUT_MS,
+      `PricingTestCreator:${game.name}`
+    );
     res.json({ success: true, result });
   } catch (err) {
     console.error('PricingTestCreatorAgent failed:', err);
@@ -36,7 +41,11 @@ pricingRouter.post('/evaluate-tests', async (_req, res) => {
   const agent = new PricingTestEvaluatorAgent();
 
   try {
-    const result = await agent.runFullPipeline(db);
+    const result = await withTimeout(
+      agent.runFullPipeline(db),
+      AGENT_RUN_TIMEOUT_MS,
+      'PricingTestEvaluator'
+    );
     res.json({ success: true, result });
   } catch (err) {
     console.error('PricingTestEvaluatorAgent failed:', err);
@@ -50,17 +59,21 @@ pricingRouter.post('/run-all', async (_req, res) => {
     include: { games: true },
   });
 
-  const results: Array<{ gameId: string; status: string }> = [];
+  const results: Array<{ gameId: string; status: string; error?: string }> = [];
 
   for (const creator of creators) {
     for (const game of creator.games) {
       const agent = new PricingTestCreatorAgent();
       try {
-        await agent.runFullPipeline(creator.id, game.id, db);
+        await withTimeout(
+          agent.runFullPipeline(creator.id, game.id, db),
+          AGENT_RUN_TIMEOUT_MS,
+          `PricingTestCreator:${game.name}`
+        );
         results.push({ gameId: game.id, status: 'success' });
       } catch (err) {
         console.error(`Pricing tests failed for game ${game.id}:`, err);
-        results.push({ gameId: game.id, status: 'failed' });
+        results.push({ gameId: game.id, status: 'failed', error: String(err) });
       }
     }
   }

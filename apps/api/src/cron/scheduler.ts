@@ -1,5 +1,6 @@
 import cron from 'node-cron';
 import { db } from '../lib/db';
+import { withTimeout, AGENT_RUN_TIMEOUT_MS, BATCH_JOB_TIMEOUT_MS } from '../lib/timeout';
 import { MetricsMonitorAgent } from '../agents/metrics-monitor';
 import { CompetitorIntelligenceAgent } from '../agents/competitor-intel';
 import { PricingTestCreatorAgent, PricingTestEvaluatorAgent } from '../agents/pricing-opt';
@@ -17,11 +18,6 @@ import { postTweet } from '../lib/twitter';
 const PAID_PLANS = ['creator', 'pro', 'studio'];
 const COMPETITOR_PLANS = ['pro', 'studio'];
 
-// ─── Timeouts ────────────────────────────────────────────────
-
-const PER_GAME_TIMEOUT_MS = 30_000;   // 30 seconds per agent run
-const MAX_JOB_RUNTIME_MS = 300_000;   // 5 minutes per entire job
-
 // ─── Job Lock Guard ──────────────────────────────────────────
 
 const runningJobs = new Set<string>();
@@ -36,18 +32,6 @@ async function getCreatorsWithGames(plans: string[]) {
   return db.creator.findMany({
     where: { plan: { in: plans } },
     include: { games: true },
-  });
-}
-
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => {
-      reject(new Error(`Timeout after ${ms}ms: ${label}`));
-    }, ms);
-
-    promise
-      .then((val) => { clearTimeout(timer); resolve(val); })
-      .catch((err) => { clearTimeout(timer); reject(err); });
   });
 }
 
@@ -89,7 +73,7 @@ function guardedJob(jobName: string, runner: () => Promise<void>): () => void {
 
     runningJobs.add(jobName);
 
-    withTimeout(runner(), MAX_JOB_RUNTIME_MS, `${jobName} max runtime`)
+    withTimeout(runner(), BATCH_JOB_TIMEOUT_MS, `${jobName} max runtime`)
       .catch((err) => log(jobName, `Unhandled error: ${err}`))
       .finally(() => runningJobs.delete(jobName));
   };
@@ -116,7 +100,7 @@ async function runMetricsMonitor() {
             },
             db
           ),
-          PER_GAME_TIMEOUT_MS,
+          AGENT_RUN_TIMEOUT_MS,
           `MetricsMonitor:${game.name}`
         );
         log('MetricsMonitor', `${game.name}: ${result.action} (healthScore: ${(result.output as Record<string, unknown>).healthScore ?? 'N/A'})`);
@@ -151,7 +135,7 @@ async function runCompetitorIntelligence() {
             },
             db
           ),
-          PER_GAME_TIMEOUT_MS,
+          AGENT_RUN_TIMEOUT_MS,
           `CompetitorIntel:${game.name}`
         );
         log('CompetitorIntel', `${game.name}: ${result.action} (${(result.output as Record<string, unknown>).materialChanges ? ((result.output as Record<string, unknown>).materialChanges as unknown[]).length : 0} changes)`);
@@ -175,7 +159,7 @@ async function runPricingTestCreator() {
         const agent = new PricingTestCreatorAgent();
         const result = await withTimeout(
           agent.runFullPipeline(creator.id, game.id, db),
-          PER_GAME_TIMEOUT_MS,
+          AGENT_RUN_TIMEOUT_MS,
           `PricingTestCreator:${game.name}`
         );
         log('PricingTestCreator', `${game.name}: ${result.action}`);
@@ -196,7 +180,7 @@ async function runPricingTestEvaluator() {
     const agent = new PricingTestEvaluatorAgent();
     const result = await withTimeout(
       agent.runFullPipeline(db),
-      MAX_JOB_RUNTIME_MS,
+      BATCH_JOB_TIMEOUT_MS,
       'PricingEvaluator'
     );
     const output = result.output as Record<string, unknown>;
@@ -218,7 +202,7 @@ async function runContentGeneration() {
         const agent = new ContentGenerationAgent();
         const result = await withTimeout(
           agent.runFullPipeline(creator.id, game.id, db),
-          PER_GAME_TIMEOUT_MS,
+          AGENT_RUN_TIMEOUT_MS,
           `ContentGeneration:${game.name}`
         );
         const output = result.output as Record<string, unknown>;
@@ -244,7 +228,7 @@ async function runGrowthBrief() {
         const agent = new GrowthBriefAgent();
         const result = await withTimeout(
           agent.runFullPipeline(creator.id, game.id, db),
-          PER_GAME_TIMEOUT_MS,
+          AGENT_RUN_TIMEOUT_MS,
           `GrowthBrief:${game.name}`
         );
         log('GrowthBrief', `${game.name}: ${result.action}`);
@@ -268,7 +252,7 @@ async function runMonetizationAdvisor() {
         const agent = new MonetizationAdvisorAgent();
         const result = await withTimeout(
           agent.runFullPipeline(creator.id, game.id, db),
-          PER_GAME_TIMEOUT_MS,
+          AGENT_RUN_TIMEOUT_MS,
           `MonetizationAdvisor:${game.name}`
         );
         log('MonetizationAdvisor', `${game.name}: ${result.action}`);
@@ -312,7 +296,7 @@ async function runSocialPoster() {
     try {
       const result = await withTimeout(
         postTweet(piece.content),
-        PER_GAME_TIMEOUT_MS,
+        AGENT_RUN_TIMEOUT_MS,
         `SocialPoster:${piece.id}`
       );
 

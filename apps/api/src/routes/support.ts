@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/db';
 import { PlayerSupportAgent } from '../agents/player-support';
+import { withTimeout, AGENT_RUN_TIMEOUT_MS } from '../lib/timeout';
 
 export const supportRouter = Router();
 
@@ -20,12 +21,16 @@ supportRouter.post('/incoming', async (req, res) => {
   const agent = new PlayerSupportAgent();
 
   try {
-    const result = await agent.runFullPipeline(
-      gameId,
-      playerId,
-      message,
-      source ?? 'in-game',
-      db
+    const result = await withTimeout(
+      agent.runFullPipeline(
+        gameId,
+        playerId,
+        message,
+        source ?? 'in-game',
+        db
+      ),
+      AGENT_RUN_TIMEOUT_MS,
+      `PlayerSupport:${gameId}`
     );
 
     res.json({

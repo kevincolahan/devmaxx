@@ -18,6 +18,16 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
+// Global request timeout — 5 minutes max for any request
+app.use((_req, res, next) => {
+  res.setTimeout(300_000, () => {
+    if (!res.headersSent) {
+      res.status(504).json({ error: 'Request timeout — exceeded 5 minutes' });
+    }
+  });
+  next();
+});
+
 app.use('/health', healthRouter);
 app.use('/api/agents', agentRouter);
 app.use('/api/metrics', metricsRouter);
