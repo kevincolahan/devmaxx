@@ -11,6 +11,7 @@ import { AutopilotToggle } from '@/components/autopilot-toggle';
 import { SupportTicketsList } from '@/components/support-tickets-list';
 import { ContentQueue } from '@/components/content-queue';
 import { GrowthBriefPreview } from '@/components/growth-brief-preview';
+import { InsightsChat } from '@/components/insights-chat';
 
 interface Snapshot {
   date: string;
@@ -123,7 +124,7 @@ interface DashboardClientProps {
   userEmail: string;
 }
 
-type Tab = 'overview' | 'pricing' | 'support' | 'content' | 'brief' | 'recommendations';
+type Tab = 'overview' | 'pricing' | 'support' | 'content' | 'brief' | 'recommendations' | 'ask';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
   const { creator, games, recentRuns, recommendations, contentPieces, lastBrief, stats } = data;
@@ -136,6 +137,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'overview', label: 'Overview' },
+    { key: 'ask', label: 'Ask Devmaxx' },
     { key: 'pricing', label: 'Pricing', count: allPriceTests.filter((t) => t.status === 'running').length },
     { key: 'support', label: 'Support', count: escalatedCount },
     { key: 'content', label: 'Content', count: draftContentCount },
@@ -248,6 +250,12 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
             <AgentRunFeed runs={recentRuns} />
           </div>
         </>
+      )}
+
+      {activeTab === 'ask' && (
+        <div className="mt-8">
+          <InsightsChat hasGames={games.length > 0} />
+        </div>
       )}
 
       {activeTab === 'pricing' && (
