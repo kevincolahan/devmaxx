@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/db';
 import { ContentGenerationAgent } from '../agents/content-gen';
-import { postTweet } from '../lib/twitter';
+import { postTweet, checkTwitterCredentials } from '../lib/twitter';
 import { postToLinkedIn } from '../lib/linkedin';
 import { postToTikTok } from '../lib/tiktok';
 import { createInstagramPost } from '../lib/instagram';
@@ -61,6 +61,16 @@ contentRouter.post('/generate', async (req, res) => {
 // ─── Post to X/Twitter via API v2 ───────────────────────────
 
 contentRouter.post('/post-to-x', async (req, res) => {
+  // Pre-flight check — are credentials configured?
+  const creds = checkTwitterCredentials();
+  if (!creds.configured) {
+    console.error(`[post-to-x] Twitter credentials not configured. Missing: ${creds.missing.join(', ')}`);
+    res.status(503).json({
+      error: `Twitter credentials not configured. Missing: ${creds.missing.join(', ')}`,
+    });
+    return;
+  }
+
   const { contentPieceId } = req.body as { contentPieceId: string };
 
   if (!contentPieceId) {
@@ -86,6 +96,8 @@ contentRouter.post('/post-to-x', async (req, res) => {
   }
 
   try {
+    console.log(`[post-to-x] Posting piece ${contentPieceId} (${piece.content.length} chars)`);
+
     const result = await withTimeout(
       postTweet(piece.content),
       AGENT_RUN_TIMEOUT_MS,
@@ -93,6 +105,7 @@ contentRouter.post('/post-to-x', async (req, res) => {
     );
 
     if (!result.success) {
+      console.error(`[post-to-x] Twitter API rejected: ${result.error}`);
       res.status(502).json({ error: result.error });
       return;
     }
@@ -110,10 +123,11 @@ contentRouter.post('/post-to-x', async (req, res) => {
       },
     });
 
+    console.log(`[post-to-x] Success — ${result.tweetUrl}`);
     res.json({ success: true, postId: result.tweetId, postUrl: result.tweetUrl });
   } catch (err) {
-    console.error('Failed to post to X:', err);
-    res.status(500).json({ error: 'Failed to post tweet', details: String(err) });
+    console.error('[post-to-x] Unhandled error:', err);
+    res.status(500).json({ error: String(err) });
   }
 });
 

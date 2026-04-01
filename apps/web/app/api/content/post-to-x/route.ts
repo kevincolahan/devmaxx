@@ -17,17 +17,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'contentPieceId is required' }, { status: 400 });
   }
 
-  const response = await fetch(`${API_BASE}/api/content/post-to-x`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contentPieceId }),
-  });
+  try {
+    const response = await fetch(`${API_BASE}/api/content/post-to-x`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentPieceId }),
+    });
 
-  const data = await response.json();
+    const data = await response.json();
 
-  if (!response.ok) {
-    return NextResponse.json(data, { status: response.status });
+    if (!response.ok) {
+      console.error(`[post-to-x proxy] Railway API returned ${response.status}:`, data);
+      return NextResponse.json(data, { status: response.status });
+    }
+
+    return NextResponse.json(data);
+  } catch (err) {
+    console.error('[post-to-x proxy] Failed to reach Railway API:', err);
+    return NextResponse.json(
+      { error: `Failed to reach API: ${String(err)}` },
+      { status: 502 }
+    );
   }
-
-  return NextResponse.json(data);
 }

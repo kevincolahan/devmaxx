@@ -40,6 +40,21 @@ app.use('/api/growth-brief', growthBriefRouter);
 
 app.listen(PORT, () => {
   console.log(`Devmaxx API running on port ${PORT}`);
+
+  // Log social credential status at startup
+  const socialCreds = {
+    TWITTER_API_KEY: !!process.env.TWITTER_API_KEY,
+    TWITTER_API_SECRET: !!process.env.TWITTER_API_SECRET,
+    TWITTER_ACCESS_TOKEN: !!process.env.TWITTER_ACCESS_TOKEN,
+    TWITTER_ACCESS_SECRET: !!process.env.TWITTER_ACCESS_SECRET,
+    LINKEDIN_ACCESS_TOKEN: !!process.env.LINKEDIN_ACCESS_TOKEN,
+    LINKEDIN_ORG_ID: !!process.env.LINKEDIN_ORG_ID,
+    TIKTOK_ACCESS_TOKEN: !!process.env.TIKTOK_ACCESS_TOKEN,
+    INSTAGRAM_ACCESS_TOKEN: !!process.env.INSTAGRAM_ACCESS_TOKEN,
+    INSTAGRAM_ACCOUNT_ID: !!process.env.INSTAGRAM_ACCOUNT_ID,
+  };
+  console.log('[STARTUP] Social credentials:', socialCreds);
+
   startScheduler();
 });
 
