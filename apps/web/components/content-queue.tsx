@@ -16,16 +16,14 @@ interface ContentQueueProps {
   items: ContentItem[];
 }
 
-function getPlatformIcon(platform: string | null): string {
-  const icons: Record<string, string> = {
-    x: 'X',
-    linkedin: 'in',
-    instagram: 'IG',
-    youtube: 'YT',
-    blog: 'Blog',
-  };
-  return platform ? icons[platform] ?? platform : '--';
-}
+const PLATFORM_CONFIG: Record<string, { label: string; badge: string; badgeColor: string; url?: string }> = {
+  x: { label: 'X', badge: 'X', badgeColor: 'bg-gray-700 text-white' },
+  linkedin: { label: 'LinkedIn', badge: 'in', badgeColor: 'bg-blue-700 text-white', url: 'https://www.linkedin.com/feed/' },
+  instagram: { label: 'Instagram', badge: 'IG', badgeColor: 'bg-gradient-to-br from-purple-600 to-pink-500 text-white', url: 'https://www.instagram.com/' },
+  tiktok: { label: 'TikTok', badge: 'TT', badgeColor: 'bg-black text-white border border-gray-600', url: 'https://www.tiktok.com/upload' },
+  youtube: { label: 'YouTube', badge: 'YT', badgeColor: 'bg-red-600 text-white', url: 'https://studio.youtube.com/' },
+  blog: { label: 'Blog', badge: 'Blog', badgeColor: 'bg-gray-600 text-gray-200' },
+};
 
 function getTypeLabel(type: string): string {
   const labels: Record<string, string> = {
@@ -46,23 +44,91 @@ function getScoreColor(score: number | null): string {
   return 'text-orange-400';
 }
 
+function getStatusStyle(status: string): string {
+  switch (status) {
+    case 'approved': return 'text-green-400 bg-green-400/10';
+    case 'rejected': return 'text-red-400 bg-red-400/10';
+    case 'published': return 'text-blue-400 bg-blue-400/10';
+    default: return 'text-gray-400 bg-gray-400/10';
+  }
+}
+
+type FilterStatus = 'all' | 'draft' | 'approved' | 'published' | 'rejected';
+
 export function ContentQueue({ items }: ContentQueueProps) {
   const [localItems, setLocalItems] = useState(items);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [postingId, setPostingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterStatus>('all');
 
-  async function handleAction(id: string, action: 'approved' | 'rejected') {
+  async function handleStatusUpdate(id: string, status: 'approved' | 'rejected' | 'published') {
     try {
       await fetch('/api/content/status', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status: action }),
+        body: JSON.stringify({ id, status }),
       });
       setLocalItems((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: action } : item))
+        prev.map((item) => (item.id === id ? { ...item, status } : item))
       );
     } catch (err) {
       console.error('Failed to update content status:', err);
     }
   }
+
+  async function handleCopy(id: string, text: string) {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy:', err);
+    }
+  }
+
+  async function handleCopyAndOpen(id: string, text: string, url: string) {
+    await handleCopy(id, text);
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  async function handlePostToX(id: string) {
+    setPostingId(id);
+    try {
+      const res = await fetch('/api/content/post-to-x', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentPieceId: id }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(`Failed to post: ${data.error}`);
+        return;
+      }
+
+      setLocalItems((prev) =>
+        prev.map((item) => (item.id === id ? { ...item, status: 'published' } : item))
+      );
+    } catch (err) {
+      console.error('Failed to post to X:', err);
+      alert('Failed to post to X. Check console for details.');
+    } finally {
+      setPostingId(null);
+    }
+  }
+
+  const filteredItems = filter === 'all'
+    ? localItems
+    : localItems.filter((item) => item.status === filter);
+
+  const counts = {
+    all: localItems.length,
+    draft: localItems.filter((i) => i.status === 'draft').length,
+    approved: localItems.filter((i) => i.status === 'approved').length,
+    published: localItems.filter((i) => i.status === 'published').length,
+    rejected: localItems.filter((i) => i.status === 'rejected').length,
+  };
 
   if (localItems.length === 0) {
     return (
@@ -77,56 +143,152 @@ export function ContentQueue({ items }: ContentQueueProps) {
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-      <h3 className="mb-4 font-semibold text-white">Content Queue</h3>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold text-white">Content Queue</h3>
+        <div className="flex gap-1">
+          {(['all', 'draft', 'approved', 'published', 'rejected'] as FilterStatus[]).map((f) => (
+            <button
+              key={f}
+              onClick={() => setFilter(f)}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                filter === f
+                  ? 'bg-gray-700 text-white'
+                  : 'text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {counts[f] > 0 && (
+                <span className="ml-1 text-gray-500">{counts[f]}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-4">
-        {localItems.map((item) => (
-          <div
-            key={item.id}
-            className="rounded-lg border border-gray-800 p-4"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                {item.platform && (
-                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-gray-800 text-xs font-bold text-gray-300">
-                    {getPlatformIcon(item.platform)}
+        {filteredItems.map((item) => {
+          const platformInfo = item.platform ? PLATFORM_CONFIG[item.platform] : null;
+          const isXPost = item.platform === 'x';
+          const charCount = item.content.length;
+          const isOverLimit = isXPost && charCount > 280;
+          const canPostToX = isXPost && !isOverLimit && (item.status === 'approved' || item.status === 'draft');
+          const hasExternalUrl = platformInfo?.url;
+
+          return (
+            <div
+              key={item.id}
+              className="rounded-lg border border-gray-800 p-4"
+            >
+              {/* Header row */}
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  {platformInfo && (
+                    <span className={`flex h-7 items-center justify-center rounded-md px-2 text-xs font-bold ${platformInfo.badgeColor}`}>
+                      {platformInfo.badge}
+                    </span>
+                  )}
+                  <span className="text-sm font-medium text-gray-300">
+                    {getTypeLabel(item.type)}
                   </span>
+                  <span className={`text-sm font-bold ${getScoreColor(item.qualityScore)}`}>
+                    {item.qualityScore !== null ? `${item.qualityScore}/10` : ''}
+                  </span>
+                </div>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getStatusStyle(item.status)}`}>
+                  {item.status}
+                </span>
+              </div>
+
+              {/* Full content */}
+              <p className="mt-3 whitespace-pre-wrap text-sm text-gray-300">
+                {item.content}
+              </p>
+
+              {/* Character count for X posts */}
+              {isXPost && (
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="h-1 flex-1 overflow-hidden rounded-full bg-gray-800">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        isOverLimit ? 'bg-red-500' : charCount > 250 ? 'bg-yellow-500' : 'bg-green-500'
+                      }`}
+                      style={{ width: `${Math.min((charCount / 280) * 100, 100)}%` }}
+                    />
+                  </div>
+                  <span className={`text-xs font-mono ${isOverLimit ? 'text-red-400' : 'text-gray-500'}`}>
+                    {charCount}/280
+                  </span>
+                </div>
+              )}
+
+              {/* Action buttons */}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {/* Copy button — always visible */}
+                <button
+                  onClick={() => handleCopy(item.id, item.content)}
+                  className="rounded-md bg-gray-700/50 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700"
+                >
+                  {copiedId === item.id ? 'Copied!' : 'Copy'}
+                </button>
+
+                {/* Draft actions: Approve / Reject */}
+                {item.status === 'draft' && (
+                  <>
+                    <button
+                      onClick={() => handleStatusUpdate(item.id, 'approved')}
+                      className="rounded-md bg-green-600/20 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-600/30"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => handleStatusUpdate(item.id, 'rejected')}
+                      className="rounded-md bg-red-600/20 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-600/30"
+                    >
+                      Reject
+                    </button>
+                  </>
                 )}
-                <span className="text-sm font-medium text-gray-300">
-                  {getTypeLabel(item.type)}
-                </span>
-                <span className={`text-sm font-bold ${getScoreColor(item.qualityScore)}`}>
-                  {item.qualityScore !== null ? `${item.qualityScore}/10` : ''}
-                </span>
+
+                {/* Post to X — for X platform posts that are draft or approved */}
+                {canPostToX && (
+                  <button
+                    onClick={() => handlePostToX(item.id)}
+                    disabled={postingId === item.id}
+                    className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 disabled:opacity-50"
+                  >
+                    {postingId === item.id ? 'Posting...' : 'Post to X'}
+                  </button>
+                )}
+
+                {/* Copy & Open — for LinkedIn, Instagram, TikTok */}
+                {hasExternalUrl && item.status !== 'published' && item.status !== 'rejected' && (
+                  <button
+                    onClick={() => handleCopyAndOpen(item.id, item.content, platformInfo!.url!)}
+                    className="rounded-md bg-blue-600/20 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-600/30"
+                  >
+                    Copy & Open {platformInfo!.label}
+                  </button>
+                )}
+
+                {/* Mark as Posted — for approved items (manual posting confirmation) */}
+                {item.status === 'approved' && (
+                  <button
+                    onClick={() => handleStatusUpdate(item.id, 'published')}
+                    className="rounded-md bg-brand-500/20 px-3 py-1.5 text-xs font-medium text-brand-400 hover:bg-brand-500/30"
+                  >
+                    Mark as Posted
+                  </button>
+                )}
               </div>
-              <span className={`text-xs ${
-                item.status === 'approved' ? 'text-green-400' :
-                item.status === 'rejected' ? 'text-red-400' :
-                'text-gray-400'
-              }`}>
-                {item.status}
-              </span>
             </div>
-            <p className="mt-3 whitespace-pre-wrap text-sm text-gray-300">
-              {item.content.length > 300 ? item.content.slice(0, 300) + '...' : item.content}
-            </p>
-            {item.status === 'draft' && (
-              <div className="mt-3 flex gap-2">
-                <button
-                  onClick={() => handleAction(item.id, 'approved')}
-                  className="rounded-md bg-green-600/20 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-600/30"
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => handleAction(item.id, 'rejected')}
-                  className="rounded-md bg-red-600/20 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-600/30"
-                >
-                  Reject
-                </button>
-              </div>
-            )}
+          );
+        })}
+
+        {filteredItems.length === 0 && (
+          <div className="flex h-24 items-center justify-center text-gray-500">
+            No {filter} content pieces.
           </div>
-        ))}
+        )}
       </div>
     </div>
   );

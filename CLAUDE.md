@@ -85,7 +85,8 @@ content generation, and weekly growth briefs. Creators connect once and receive 
 - **Always verify webhook signature** before processing
 
 ### Social / Marketing
-- **Scheduling:** Buffer API
+- **X/Twitter:** Direct posting via Twitter API v2 with OAuth 1.0a signing (`apps/api/src/lib/twitter.ts`)
+- **LinkedIn/Instagram/TikTok:** Manual copy-paste workflow (beta approach)
 - **Scraping:** Apify
 - **Blog:** Ghost CMS via Admin API
 
@@ -411,8 +412,13 @@ CLOUDFLARE_R2_ACCOUNT_ID=
 CLOUDFLARE_R2_ACCESS_KEY_ID=
 CLOUDFLARE_R2_SECRET_ACCESS_KEY=
 
+# Twitter / X (OAuth 1.0a for API v2)
+TWITTER_API_KEY=
+TWITTER_API_SECRET=
+TWITTER_ACCESS_TOKEN=
+TWITTER_ACCESS_SECRET=
+
 # Marketing
-BUFFER_ACCESS_TOKEN=
 APIFY_API_TOKEN=
 GHOST_ADMIN_API_KEY=
 GHOST_API_URL=

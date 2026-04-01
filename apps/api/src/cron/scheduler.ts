@@ -6,6 +6,7 @@ import { PricingTestCreatorAgent, PricingTestEvaluatorAgent } from '../agents/pr
 import { ContentGenerationAgent } from '../agents/content-gen';
 import { GrowthBriefAgent } from '../agents/growth-brief';
 import { MonetizationAdvisorAgent } from '../agents/monetization';
+import { postTweet } from '../lib/twitter';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -182,6 +183,65 @@ async function runMonetizationAdvisor() {
   log('MonetizationAdvisor', 'Complete');
 }
 
+// ─── Social Poster (auto-post approved X content) ────────────
+
+async function runSocialPoster() {
+  log('SocialPoster', 'Starting auto-post for approved X content');
+
+  const approvedXPosts = await db.contentPiece.findMany({
+    where: {
+      platform: 'x',
+      status: 'approved',
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  if (approvedXPosts.length === 0) {
+    log('SocialPoster', 'No approved X posts to publish');
+    return;
+  }
+
+  let posted = 0;
+  let failed = 0;
+
+  for (const piece of approvedXPosts) {
+    if (piece.content.length > 280) {
+      log('SocialPoster', `Skipping ${piece.id} — exceeds 280 chars (${piece.content.length})`);
+      continue;
+    }
+
+    try {
+      const result = await postTweet(piece.content);
+
+      if (result.success) {
+        await db.contentPiece.update({
+          where: { id: piece.id },
+          data: {
+            status: 'published',
+            publishedAt: new Date(),
+            performance: {
+              tweetId: result.tweetId,
+              tweetUrl: result.tweetUrl,
+              postedAt: new Date().toISOString(),
+              autoPosted: true,
+            },
+          },
+        });
+        posted++;
+        log('SocialPoster', `Posted ${piece.id}: ${result.tweetUrl}`);
+      } else {
+        failed++;
+        log('SocialPoster', `Failed ${piece.id}: ${result.error}`);
+      }
+    } catch (err) {
+      failed++;
+      log('SocialPoster', `Error posting ${piece.id}: ${err}`);
+    }
+  }
+
+  log('SocialPoster', `Complete — posted: ${posted}, failed: ${failed}, skipped: ${approvedXPosts.length - posted - failed}`);
+}
+
 // ─── Schedule Registration ───────────────────────────────────
 
 export function startScheduler() {
@@ -222,6 +282,11 @@ export function startScheduler() {
     runMonetizationAdvisor().catch((err) => log('MonetizationAdvisor', `Unhandled error: ${err}`));
   }, { timezone: 'UTC' });
 
+  // SocialPoster — 10am UTC daily (auto-posts approved X content)
+  cron.schedule('0 10 * * *', () => {
+    runSocialPoster().catch((err) => log('SocialPoster', `Unhandled error: ${err}`));
+  }, { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered:');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  CompetitorIntel      — 0 8 * * *    (8am UTC daily)');
@@ -230,4 +295,5 @@ export function startScheduler() {
   console.log('  ContentGeneration    — 0 7 * * 1    (7am UTC Monday)');
   console.log('  GrowthBrief          — 0 18 * * 0   (6pm UTC Sunday)');
   console.log('  MonetizationAdvisor  — 0 9 1 * *    (9am UTC 1st of month)');
+  console.log('  SocialPoster         — 0 10 * * *   (10am UTC daily)');
 }
