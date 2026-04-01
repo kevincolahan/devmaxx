@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { db } from '../lib/db';
 import { ContentGenerationAgent } from '../agents/content-gen';
 import { postTweet } from '../lib/twitter';
+import { postToLinkedIn } from '../lib/linkedin';
+import { postToTikTok } from '../lib/tiktok';
+import { createInstagramPost } from '../lib/instagram';
 import { withTimeout, AGENT_RUN_TIMEOUT_MS } from '../lib/timeout';
 
 export const contentRouter = Router();
@@ -107,9 +110,173 @@ contentRouter.post('/post-to-x', async (req, res) => {
       },
     });
 
-    res.json({ success: true, tweetId: result.tweetId, tweetUrl: result.tweetUrl });
+    res.json({ success: true, postId: result.tweetId, postUrl: result.tweetUrl });
   } catch (err) {
     console.error('Failed to post to X:', err);
     res.status(500).json({ error: 'Failed to post tweet', details: String(err) });
+  }
+});
+
+// ─── Post to LinkedIn ────────────────────────────────────────
+
+contentRouter.post('/post-to-linkedin', async (req, res) => {
+  const { contentPieceId } = req.body as { contentPieceId: string };
+
+  if (!contentPieceId) {
+    res.status(400).json({ error: 'contentPieceId is required' });
+    return;
+  }
+
+  const piece = await db.contentPiece.findUnique({ where: { id: contentPieceId } });
+
+  if (!piece) {
+    res.status(404).json({ error: 'Content piece not found' });
+    return;
+  }
+
+  if (piece.platform !== 'linkedin') {
+    res.status(400).json({ error: 'Content piece is not a LinkedIn post' });
+    return;
+  }
+
+  try {
+    const result = await withTimeout(
+      postToLinkedIn(piece.content),
+      AGENT_RUN_TIMEOUT_MS,
+      `PostToLinkedIn:${contentPieceId}`
+    );
+
+    if (!result.success) {
+      res.status(502).json({ error: result.error });
+      return;
+    }
+
+    await db.contentPiece.update({
+      where: { id: contentPieceId },
+      data: {
+        status: 'published',
+        publishedAt: new Date(),
+        performance: {
+          postId: result.postId,
+          postUrl: result.postUrl,
+          platform: 'linkedin',
+          postedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    res.json({ success: true, postId: result.postId, postUrl: result.postUrl });
+  } catch (err) {
+    console.error('Failed to post to LinkedIn:', err);
+    res.status(500).json({ error: 'Failed to post to LinkedIn', details: String(err) });
+  }
+});
+
+// ─── Post to TikTok ─────────────────────────────────────────
+
+contentRouter.post('/post-to-tiktok', async (req, res) => {
+  const { contentPieceId } = req.body as { contentPieceId: string };
+
+  if (!contentPieceId) {
+    res.status(400).json({ error: 'contentPieceId is required' });
+    return;
+  }
+
+  const piece = await db.contentPiece.findUnique({ where: { id: contentPieceId } });
+
+  if (!piece) {
+    res.status(404).json({ error: 'Content piece not found' });
+    return;
+  }
+
+  if (piece.platform !== 'tiktok') {
+    res.status(400).json({ error: 'Content piece is not a TikTok post' });
+    return;
+  }
+
+  try {
+    const result = await withTimeout(
+      postToTikTok(piece.content),
+      AGENT_RUN_TIMEOUT_MS,
+      `PostToTikTok:${contentPieceId}`
+    );
+
+    if (!result.success) {
+      res.status(502).json({ error: result.error });
+      return;
+    }
+
+    await db.contentPiece.update({
+      where: { id: contentPieceId },
+      data: {
+        status: 'published',
+        publishedAt: new Date(),
+        performance: {
+          postId: result.postId,
+          platform: 'tiktok',
+          postedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    res.json({ success: true, postId: result.postId });
+  } catch (err) {
+    console.error('Failed to post to TikTok:', err);
+    res.status(500).json({ error: 'Failed to post to TikTok', details: String(err) });
+  }
+});
+
+// ─── Post to Instagram ──────────────────────────────────────
+
+contentRouter.post('/post-to-instagram', async (req, res) => {
+  const { contentPieceId } = req.body as { contentPieceId: string };
+
+  if (!contentPieceId) {
+    res.status(400).json({ error: 'contentPieceId is required' });
+    return;
+  }
+
+  const piece = await db.contentPiece.findUnique({ where: { id: contentPieceId } });
+
+  if (!piece) {
+    res.status(404).json({ error: 'Content piece not found' });
+    return;
+  }
+
+  if (piece.platform !== 'instagram') {
+    res.status(400).json({ error: 'Content piece is not an Instagram post' });
+    return;
+  }
+
+  try {
+    const result = await withTimeout(
+      createInstagramPost(piece.content),
+      AGENT_RUN_TIMEOUT_MS,
+      `PostToInstagram:${contentPieceId}`
+    );
+
+    if (!result.success) {
+      res.status(502).json({ error: result.error });
+      return;
+    }
+
+    await db.contentPiece.update({
+      where: { id: contentPieceId },
+      data: {
+        status: 'published',
+        publishedAt: new Date(),
+        performance: {
+          postId: result.postId,
+          postUrl: result.postUrl,
+          platform: 'instagram',
+          postedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    res.json({ success: true, postId: result.postId, postUrl: result.postUrl });
+  } catch (err) {
+    console.error('Failed to post to Instagram:', err);
+    res.status(500).json({ error: 'Failed to post to Instagram', details: String(err) });
   }
 });

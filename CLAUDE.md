@@ -86,7 +86,10 @@ content generation, and weekly growth briefs. Creators connect once and receive 
 
 ### Social / Marketing
 - **X/Twitter:** Direct posting via Twitter API v2 with OAuth 1.0a signing (`apps/api/src/lib/twitter.ts`)
-- **LinkedIn/Instagram/TikTok:** Manual copy-paste workflow (beta approach)
+- **LinkedIn:** Direct posting via LinkedIn API v2 UGC Posts (`apps/api/src/lib/linkedin.ts`)
+- **TikTok:** Direct posting via TikTok Content Posting API (`apps/api/src/lib/tiktok.ts`)
+- **Instagram:** Direct posting via Instagram Graph API with branded image (`apps/api/src/lib/instagram.ts`)
+- **SocialPoster cron:** 10am UTC daily, max 1 post per platform per day, quiet hours 11pm-7am UTC
 - **Scraping:** Apify
 - **Blog:** Ghost CMS via Admin API
 
@@ -418,6 +421,20 @@ TWITTER_API_KEY=
 TWITTER_API_SECRET=
 TWITTER_ACCESS_TOKEN=
 TWITTER_ACCESS_SECRET=
+
+# LinkedIn
+LINKEDIN_ACCESS_TOKEN=
+LINKEDIN_ORG_ID=
+
+# TikTok
+TIKTOK_ACCESS_TOKEN=
+TIKTOK_CLIENT_KEY=
+TIKTOK_CLIENT_SECRET=
+
+# Instagram
+INSTAGRAM_ACCESS_TOKEN=
+INSTAGRAM_ACCOUNT_ID=
+DEVMAXX_DEFAULT_IMAGE_URL=
 
 # Marketing
 APIFY_API_TOKEN=

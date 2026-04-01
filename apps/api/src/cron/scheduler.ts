@@ -9,6 +9,9 @@ import { GrowthBriefAgent } from '../agents/growth-brief';
 import { MonetizationAdvisorAgent } from '../agents/monetization';
 import { RobloxNewsMonitorAgent } from '../agents/news-monitor';
 import { postTweet } from '../lib/twitter';
+import { postToLinkedIn } from '../lib/linkedin';
+import { postToTikTok } from '../lib/tiktok';
+import { createInstagramPost } from '../lib/instagram';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -298,67 +301,87 @@ async function runNewsMonitor() {
   log('NewsMonitor', 'Complete');
 }
 
-// ─── Social Poster (auto-post approved X content) ────────────
+// ─── Social Poster (auto-post approved content, all platforms) ─
 
-async function runSocialPoster() {
-  log('SocialPoster', 'Starting auto-post for approved X content');
-
-  const approvedXPosts = await db.contentPiece.findMany({
-    where: {
-      platform: 'x',
-      status: 'approved',
-    },
+async function postOnePiece(
+  platform: string,
+  poster: (text: string) => Promise<{ success: boolean; postId?: string; postUrl?: string; error?: string }>
+): Promise<boolean> {
+  const piece = await db.contentPiece.findFirst({
+    where: { platform, status: 'approved' },
     orderBy: { createdAt: 'asc' },
   });
 
-  if (approvedXPosts.length === 0) {
-    log('SocialPoster', 'No approved X posts to publish');
+  if (!piece) {
+    log('SocialPoster', `No approved ${platform} posts`);
+    return false;
+  }
+
+  if (platform === 'x' && piece.content.length > 280) {
+    log('SocialPoster', `Skipping ${platform} ${piece.id} — exceeds 280 chars`);
+    return false;
+  }
+
+  try {
+    const result = await withTimeout(
+      poster(piece.content),
+      AGENT_RUN_TIMEOUT_MS,
+      `SocialPoster:${platform}:${piece.id}`
+    );
+
+    if (result.success) {
+      await db.contentPiece.update({
+        where: { id: piece.id },
+        data: {
+          status: 'published',
+          publishedAt: new Date(),
+          performance: {
+            postId: result.postId,
+            postUrl: result.postUrl,
+            platform,
+            postedAt: new Date().toISOString(),
+            autoPosted: true,
+          },
+        },
+      });
+      log('SocialPoster', `[${platform}] Posted ${piece.id}: ${result.postUrl ?? result.postId ?? 'ok'}`);
+      return true;
+    } else {
+      log('SocialPoster', `[${platform}] Failed ${piece.id}: ${result.error}`);
+      return false;
+    }
+  } catch (err) {
+    log('SocialPoster', `[${platform}] Error ${piece.id}: ${err}`);
+    return false;
+  }
+}
+
+async function runSocialPoster() {
+  log('SocialPoster', 'Starting daily multi-platform auto-post');
+
+  // Quiet hours check — never post between 11pm-7am UTC
+  const hour = new Date().getUTCHours();
+  if (hour >= 23 || hour < 7) {
+    log('SocialPoster', `Skipping — quiet hours (${hour}:00 UTC)`);
     return;
   }
 
-  let posted = 0;
-  let failed = 0;
+  const results: Record<string, boolean> = {};
 
-  for (const piece of approvedXPosts) {
-    if (piece.content.length > 280) {
-      log('SocialPoster', `Skipping ${piece.id} — exceeds 280 chars (${piece.content.length})`);
-      continue;
-    }
+  // 1. X/Twitter (highest priority)
+  results.x = await postOnePiece('x', postTweet);
 
-    try {
-      const result = await withTimeout(
-        postTweet(piece.content),
-        AGENT_RUN_TIMEOUT_MS,
-        `SocialPoster:${piece.id}`
-      );
+  // 2. LinkedIn
+  results.linkedin = await postOnePiece('linkedin', postToLinkedIn);
 
-      if (result.success) {
-        await db.contentPiece.update({
-          where: { id: piece.id },
-          data: {
-            status: 'published',
-            publishedAt: new Date(),
-            performance: {
-              tweetId: result.tweetId,
-              tweetUrl: result.tweetUrl,
-              postedAt: new Date().toISOString(),
-              autoPosted: true,
-            },
-          },
-        });
-        posted++;
-        log('SocialPoster', `Posted ${piece.id}: ${result.tweetUrl}`);
-      } else {
-        failed++;
-        log('SocialPoster', `Failed ${piece.id}: ${result.error}`);
-      }
-    } catch (err) {
-      failed++;
-      log('SocialPoster', `Error posting ${piece.id}: ${err}`);
-    }
-  }
+  // 3. TikTok (if token available)
+  results.tiktok = await postOnePiece('tiktok', postToTikTok);
 
-  log('SocialPoster', `Complete — posted: ${posted}, failed: ${failed}, skipped: ${approvedXPosts.length - posted - failed}`);
+  // 4. Instagram (if token available)
+  results.instagram = await postOnePiece('instagram', createInstagramPost);
+
+  const posted = Object.values(results).filter(Boolean).length;
+  log('SocialPoster', `Complete — ${posted}/4 platforms posted (${JSON.stringify(results)})`);
 }
 
 // ─── Schedule Registration ───────────────────────────────────

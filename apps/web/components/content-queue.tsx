@@ -94,10 +94,20 @@ export function ContentQueue({ items }: ContentQueueProps) {
     window.open(url, '_blank', 'noopener,noreferrer');
   }
 
-  async function handlePostToX(id: string) {
+  async function handlePostToPlatform(id: string, platform: string) {
+    const routes: Record<string, string> = {
+      x: '/api/content/post-to-x',
+      linkedin: '/api/content/post-to-linkedin',
+      tiktok: '/api/content/post-to-tiktok',
+      instagram: '/api/content/post-to-instagram',
+    };
+
+    const route = routes[platform];
+    if (!route) return;
+
     setPostingId(id);
     try {
-      const res = await fetch('/api/content/post-to-x', {
+      const res = await fetch(route, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contentPieceId: id }),
@@ -106,7 +116,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
       const data = await res.json();
 
       if (!res.ok) {
-        alert(`Failed to post: ${data.error}`);
+        alert(`Failed to post to ${platform}: ${data.error}`);
         return;
       }
 
@@ -114,8 +124,8 @@ export function ContentQueue({ items }: ContentQueueProps) {
         prev.map((item) => (item.id === id ? { ...item, status: 'published' } : item))
       );
     } catch (err) {
-      console.error('Failed to post to X:', err);
-      alert('Failed to post to X. Check console for details.');
+      console.error(`Failed to post to ${platform}:`, err);
+      alert(`Failed to post to ${platform}. Check console for details.`);
     } finally {
       setPostingId(null);
     }
@@ -175,8 +185,13 @@ export function ContentQueue({ items }: ContentQueueProps) {
           const isXPost = item.platform === 'x';
           const charCount = item.content.length;
           const isOverLimit = isXPost && charCount > 280;
-          const canPostToX = isXPost && !isOverLimit && (item.status === 'approved' || item.status === 'draft' || item.status === 'pending_review');
+          const canPost = (item.status === 'approved' || item.status === 'draft' || item.status === 'pending_review');
+          const canPostToX = isXPost && !isOverLimit && canPost;
+          const canPostToLinkedIn = item.platform === 'linkedin' && canPost;
+          const canPostToTikTok = item.platform === 'tiktok' && canPost;
+          const canPostToInstagram = item.platform === 'instagram' && canPost;
           const hasExternalUrl = platformInfo?.url;
+          const hasDirectPost = canPostToX || canPostToLinkedIn || canPostToTikTok || canPostToInstagram;
 
           return (
             <div
@@ -287,19 +302,46 @@ export function ContentQueue({ items }: ContentQueueProps) {
                   </>
                 )}
 
-                {/* Post to X — for X platform posts that are draft or approved */}
+                {/* Direct post buttons per platform */}
                 {canPostToX && (
                   <button
-                    onClick={() => handlePostToX(item.id)}
+                    onClick={() => handlePostToPlatform(item.id, 'x')}
                     disabled={postingId === item.id}
                     className="rounded-md bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/20 disabled:opacity-50"
                   >
                     {postingId === item.id ? 'Posting...' : 'Post to X'}
                   </button>
                 )}
+                {canPostToLinkedIn && (
+                  <button
+                    onClick={() => handlePostToPlatform(item.id, 'linkedin')}
+                    disabled={postingId === item.id}
+                    className="rounded-md bg-blue-700/20 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-700/30 disabled:opacity-50"
+                  >
+                    {postingId === item.id ? 'Posting...' : 'Post to LinkedIn'}
+                  </button>
+                )}
+                {canPostToTikTok && (
+                  <button
+                    onClick={() => handlePostToPlatform(item.id, 'tiktok')}
+                    disabled={postingId === item.id}
+                    className="rounded-md bg-gray-600/20 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-600/30 disabled:opacity-50"
+                  >
+                    {postingId === item.id ? 'Posting...' : 'Post to TikTok'}
+                  </button>
+                )}
+                {canPostToInstagram && (
+                  <button
+                    onClick={() => handlePostToPlatform(item.id, 'instagram')}
+                    disabled={postingId === item.id}
+                    className="rounded-md bg-pink-600/20 px-3 py-1.5 text-xs font-medium text-pink-400 hover:bg-pink-600/30 disabled:opacity-50"
+                  >
+                    {postingId === item.id ? 'Posting...' : 'Post to Instagram'}
+                  </button>
+                )}
 
-                {/* Copy & Open — for LinkedIn, Instagram, TikTok */}
-                {hasExternalUrl && item.status !== 'published' && item.status !== 'rejected' && (
+                {/* Copy & Open fallback — for platforms without direct post (YouTube, Blog) */}
+                {hasExternalUrl && !hasDirectPost && item.status !== 'published' && item.status !== 'rejected' && (
                   <button
                     onClick={() => handleCopyAndOpen(item.id, item.content, platformInfo!.url!)}
                     className="rounded-md bg-blue-600/20 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-600/30"
