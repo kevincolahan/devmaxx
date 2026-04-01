@@ -347,6 +347,7 @@ export abstract class BaseAgent {
 | MonetizationAdvisorAgent | `agents/monetization.ts` | Monthly cron | 2 |
 | RetentionEngineerAgent | `agents/retention.ts` | Triggered by metrics drop | 2 |
 | ContentGenerationAgent | `agents/content-gen.ts` | Weekly Mon 7am UTC | 2 |
+| RobloxNewsMonitorAgent | `agents/news-monitor.ts` | Weekly Mon 6am UTC | 2 |
 
 ---
 

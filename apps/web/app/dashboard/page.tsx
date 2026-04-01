@@ -62,7 +62,7 @@ export default async function DashboardPage() {
     ? await db.contentPiece.findMany({
         where: {
           creatorId: creator.id,
-          type: { in: ['social_post', 'event_idea', 'item_desc', 'game_pass', 'email', 'ad_creative'] },
+          type: { in: ['social_post', 'event_idea', 'item_desc', 'game_pass', 'email', 'ad_creative', 'news_response'] },
         },
         orderBy: { createdAt: 'desc' },
         take: 20,
@@ -157,6 +157,7 @@ export default async function DashboardPage() {
       content: c.content,
       qualityScore: c.qualityScore,
       status: c.status,
+      sourceData: c.sourceData as Record<string, unknown> | null,
       createdAt: c.createdAt.toISOString(),
     })),
     lastBrief: lastBriefRun

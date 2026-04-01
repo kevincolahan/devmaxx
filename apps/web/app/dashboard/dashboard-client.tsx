@@ -90,6 +90,7 @@ interface ContentItem {
   content: string;
   qualityScore: number | null;
   status: string;
+  sourceData: Record<string, unknown> | null;
   createdAt: string;
 }
 

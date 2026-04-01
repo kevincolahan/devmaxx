@@ -9,6 +9,7 @@ interface ContentItem {
   content: string;
   qualityScore: number | null;
   status: string;
+  sourceData?: Record<string, unknown> | null;
   createdAt: string;
 }
 
@@ -33,6 +34,7 @@ function getTypeLabel(type: string): string {
     game_pass: 'Game Pass',
     email: 'Email',
     ad_creative: 'Ad Creative',
+    news_response: 'News Response',
   };
   return labels[type] ?? type;
 }
@@ -49,11 +51,12 @@ function getStatusStyle(status: string): string {
     case 'approved': return 'text-green-400 bg-green-400/10';
     case 'rejected': return 'text-red-400 bg-red-400/10';
     case 'published': return 'text-blue-400 bg-blue-400/10';
+    case 'pending_review': return 'text-amber-400 bg-amber-400/10';
     default: return 'text-gray-400 bg-gray-400/10';
   }
 }
 
-type FilterStatus = 'all' | 'draft' | 'approved' | 'published' | 'rejected';
+type FilterStatus = 'all' | 'draft' | 'pending_review' | 'approved' | 'published' | 'rejected';
 
 export function ContentQueue({ items }: ContentQueueProps) {
   const [localItems, setLocalItems] = useState(items);
@@ -125,6 +128,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
   const counts = {
     all: localItems.length,
     draft: localItems.filter((i) => i.status === 'draft').length,
+    pending_review: localItems.filter((i) => i.status === 'pending_review').length,
     approved: localItems.filter((i) => i.status === 'approved').length,
     published: localItems.filter((i) => i.status === 'published').length,
     rejected: localItems.filter((i) => i.status === 'rejected').length,
@@ -146,7 +150,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
       <div className="mb-4 flex items-center justify-between">
         <h3 className="font-semibold text-white">Content Queue</h3>
         <div className="flex gap-1">
-          {(['all', 'draft', 'approved', 'published', 'rejected'] as FilterStatus[]).map((f) => (
+          {(['all', 'draft', 'pending_review', 'approved', 'published', 'rejected'] as FilterStatus[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -156,7 +160,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
                   : 'text-gray-500 hover:text-gray-300'
               }`}
             >
-              {f.charAt(0).toUpperCase() + f.slice(1)}
+              {f === 'pending_review' ? 'Review' : f.charAt(0).toUpperCase() + f.slice(1)}
               {counts[f] > 0 && (
                 <span className="ml-1 text-gray-500">{counts[f]}</span>
               )}
@@ -171,7 +175,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
           const isXPost = item.platform === 'x';
           const charCount = item.content.length;
           const isOverLimit = isXPost && charCount > 280;
-          const canPostToX = isXPost && !isOverLimit && (item.status === 'approved' || item.status === 'draft');
+          const canPostToX = isXPost && !isOverLimit && (item.status === 'approved' || item.status === 'draft' || item.status === 'pending_review');
           const hasExternalUrl = platformInfo?.url;
 
           return (
@@ -198,6 +202,40 @@ export function ContentQueue({ items }: ContentQueueProps) {
                   {item.status}
                 </span>
               </div>
+
+              {/* News Response source info */}
+              {item.type === 'news_response' && item.sourceData && (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-400">
+                    News Response
+                  </span>
+                  {item.sourceData.articleSource && (
+                    <span className="text-xs text-gray-500">
+                      via {String(item.sourceData.articleSource).replace('_', ' ')}
+                    </span>
+                  )}
+                  {item.sourceData.relevanceScore && (
+                    <span className="text-xs text-gray-500">
+                      Relevance: {String(item.sourceData.relevanceScore)}/10
+                    </span>
+                  )}
+                  {item.sourceData.opportunityScore && (
+                    <span className="text-xs text-gray-500">
+                      Opportunity: {String(item.sourceData.opportunityScore)}/10
+                    </span>
+                  )}
+                  {item.sourceData.articleUrl && (
+                    <a
+                      href={String(item.sourceData.articleUrl)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-brand-400 hover:underline"
+                    >
+                      Source article
+                    </a>
+                  )}
+                </div>
+              )}
 
               {/* Full content */}
               <p className="mt-3 whitespace-pre-wrap text-sm text-gray-300">
@@ -231,8 +269,8 @@ export function ContentQueue({ items }: ContentQueueProps) {
                   {copiedId === item.id ? 'Copied!' : 'Copy'}
                 </button>
 
-                {/* Draft actions: Approve / Reject */}
-                {item.status === 'draft' && (
+                {/* Draft / Pending Review actions: Approve / Reject */}
+                {(item.status === 'draft' || item.status === 'pending_review') && (
                   <>
                     <button
                       onClick={() => handleStatusUpdate(item.id, 'approved')}

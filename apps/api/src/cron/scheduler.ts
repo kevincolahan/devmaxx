@@ -7,6 +7,7 @@ import { PricingTestCreatorAgent, PricingTestEvaluatorAgent } from '../agents/pr
 import { ContentGenerationAgent } from '../agents/content-gen';
 import { GrowthBriefAgent } from '../agents/growth-brief';
 import { MonetizationAdvisorAgent } from '../agents/monetization';
+import { RobloxNewsMonitorAgent } from '../agents/news-monitor';
 import { postTweet } from '../lib/twitter';
 
 // ─── Plan-based eligibility ──────────────────────────────────
@@ -266,6 +267,37 @@ async function runMonetizationAdvisor() {
   log('MonetizationAdvisor', 'Complete');
 }
 
+// ─── News Monitor (weekly Roblox news → content) ─────────────
+
+async function runNewsMonitor() {
+  log('NewsMonitor', 'Starting weekly Roblox news scan');
+
+  // Run as the Devmaxx system creator (kevin@devmaxx.app)
+  const systemCreator = await db.creator.findFirst({
+    where: { email: 'kevin@devmaxx.app' },
+  });
+
+  if (!systemCreator) {
+    log('NewsMonitor', 'No system creator found (kevin@devmaxx.app) — skipping');
+    return;
+  }
+
+  try {
+    const agent = new RobloxNewsMonitorAgent();
+    const result = await withTimeout(
+      agent.runFullPipeline(systemCreator.id, db),
+      BATCH_JOB_TIMEOUT_MS,
+      'NewsMonitor'
+    );
+    const output = result.output as Record<string, unknown>;
+    log('NewsMonitor', `${result.action} — scanned: ${output.articlesScanned}, high-scoring: ${output.highScoringCount}, pieces created: ${output.contentPiecesCreated}`);
+  } catch (err) {
+    log('NewsMonitor', `FAILED: ${err}`);
+  }
+
+  log('NewsMonitor', 'Complete');
+}
+
 // ─── Social Poster (auto-post approved X content) ────────────
 
 async function runSocialPoster() {
@@ -358,8 +390,12 @@ export function startScheduler() {
   // SocialPoster — 10am UTC daily (auto-posts approved X content)
   cron.schedule('0 10 * * *', guardedJob('SocialPoster', runSocialPoster), { timezone: 'UTC' });
 
+  // RobloxNewsMonitor — 6am UTC Monday (weekly news scan → content)
+  cron.schedule('0 6 * * 1', guardedJob('NewsMonitor', runNewsMonitor), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
+  console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
   console.log('  CompetitorIntel      — 0 8 * * *    (8am UTC daily)');
   console.log('  PricingTestCreator   — 0 9 * * 1    (9am UTC Monday)');
   console.log('  PricingEvaluator     — 0 */6 * * *  (every 6 hours)');
