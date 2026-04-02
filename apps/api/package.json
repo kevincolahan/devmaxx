@@ -2,9 +2,9 @@
   "name": "@devmaxx/api",
   "version": "0.0.1",
   "private": true,
-  "main": "dist/server.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node dist/server.js",
+    "start": "node server.js",
     "build": "prisma generate && tsc",
     "dev": "tsx watch src/server.ts"
   },
