@@ -1,4 +1,8 @@
 {
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
   "deploy": {
     "startCommand": "node apps/api/server.js",
     "healthcheckPath": "/health",
