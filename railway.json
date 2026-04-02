@@ -1,7 +1,7 @@
 {
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "cd apps/api && npm install"
+    "buildCommand": "npm install --prefix apps/api"
   },
   "deploy": {
     "startCommand": "node apps/api/server.js",
