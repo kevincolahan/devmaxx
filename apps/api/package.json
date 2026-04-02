@@ -3,9 +3,9 @@
   "version": "0.0.1",
   "private": true,
   "engines": { "node": "18" },
-  "main": "server.js",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "node server.js",
+    "start": "node dist/server.js",
     "build": "prisma generate && tsc",
     "dev": "tsx watch src/server.ts"
   },
