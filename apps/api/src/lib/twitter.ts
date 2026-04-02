@@ -88,6 +88,73 @@ function buildAuthorizationHeader(
 
 // ─── Public API ──────────────────────────────────────────────
 
+export interface TwitterTestResult {
+  credentialsConfigured: boolean;
+  missing: string[];
+  apiReachable?: boolean;
+  userId?: string;
+  username?: string;
+  error?: string;
+  httpStatus?: number;
+  rawResponse?: string;
+}
+
+export async function testTwitterCredentials(): Promise<TwitterTestResult> {
+  const credCheck = checkTwitterCredentials();
+  if (!credCheck.configured) {
+    return { credentialsConfigured: false, missing: credCheck.missing };
+  }
+
+  let config: TwitterConfig;
+  try {
+    config = getConfig();
+  } catch (err) {
+    return { credentialsConfigured: false, missing: [], error: String(err) };
+  }
+
+  // Call GET /2/users/me to verify OAuth without posting
+  const url = 'https://api.twitter.com/2/users/me';
+  const authorization = buildAuthorizationHeader('GET', url, config);
+
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { Authorization: authorization },
+    });
+
+    const body = await response.text();
+
+    if (!response.ok) {
+      return {
+        credentialsConfigured: true,
+        missing: [],
+        apiReachable: true,
+        httpStatus: response.status,
+        error: `Twitter API ${response.status}: ${body}`,
+        rawResponse: body,
+      };
+    }
+
+    const data = JSON.parse(body) as { data?: { id: string; username: string } };
+
+    return {
+      credentialsConfigured: true,
+      missing: [],
+      apiReachable: true,
+      httpStatus: 200,
+      userId: data.data?.id,
+      username: data.data?.username,
+    };
+  } catch (err) {
+    return {
+      credentialsConfigured: true,
+      missing: [],
+      apiReachable: false,
+      error: `Network error: ${String(err)}`,
+    };
+  }
+}
+
 export interface TweetResult {
   success: boolean;
   tweetId?: string;

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { db } from '../lib/db';
 import { ContentGenerationAgent } from '../agents/content-gen';
-import { postTweet, checkTwitterCredentials } from '../lib/twitter';
+import { postTweet, checkTwitterCredentials, testTwitterCredentials } from '../lib/twitter';
 import { postToLinkedIn } from '../lib/linkedin';
 import { postToTikTok } from '../lib/tiktok';
 import { createInstagramPost } from '../lib/instagram';
@@ -56,6 +56,18 @@ contentRouter.post('/generate', async (req, res) => {
   }
 
   res.json({ success: true, results });
+});
+
+// ─── Test Twitter credentials ────────────────────────────────
+
+contentRouter.post('/test-twitter', async (_req, res) => {
+  try {
+    const result = await testTwitterCredentials();
+    const status = result.credentialsConfigured && result.apiReachable && result.userId ? 200 : 502;
+    res.status(status).json(result);
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // ─── Post to X/Twitter via API v2 ───────────────────────────
