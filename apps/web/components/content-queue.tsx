@@ -95,8 +95,40 @@ export function ContentQueue({ items }: ContentQueueProps) {
   }
 
   async function handlePostToPlatform(id: string, platform: string) {
+    const item = localItems.find((i) => i.id === id);
+    if (!item) return;
+
+    // X/Twitter posts go directly via Vercel (bypasses Railway network restrictions)
+    if (platform === 'x') {
+      setPostingId(id);
+      try {
+        const res = await fetch('/api/social/post-tweet', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: item.content, contentPieceId: id }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert(`Failed to post to X: ${data.error}`);
+          return;
+        }
+
+        setLocalItems((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, status: 'published' } : i))
+        );
+      } catch (err) {
+        console.error('Failed to post to X:', err);
+        alert('Failed to post to X. Check console for details.');
+      } finally {
+        setPostingId(null);
+      }
+      return;
+    }
+
+    // Other platforms go through Railway API proxy
     const routes: Record<string, string> = {
-      x: '/api/content/post-to-x',
       linkedin: '/api/content/post-to-linkedin',
       tiktok: '/api/content/post-to-tiktok',
       instagram: '/api/content/post-to-instagram',
@@ -121,7 +153,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
       }
 
       setLocalItems((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: 'published' } : item))
+        prev.map((i) => (i.id === id ? { ...i, status: 'published' } : i))
       );
     } catch (err) {
       console.error(`Failed to post to ${platform}:`, err);
