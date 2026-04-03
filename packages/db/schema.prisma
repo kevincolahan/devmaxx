@@ -186,3 +186,23 @@ model BugTicket {
   game        Game     @relation(fields: [gameId], references: [id])
   createdAt   DateTime @default(now())
 }
+
+model MentionLog {
+  id              String   @id @default(cuid())
+  mentionId       String   @unique
+  authorId        String
+  authorUsername  String
+  authorFollowers Int      @default(0)
+  content         String
+  category        String
+  replyDrafted    String?
+  replyPosted     Boolean  @default(false)
+  replyTweetId    String?
+  processedAt     DateTime @default(now())
+}
+
+model KeyValue {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}

@@ -202,6 +202,7 @@ model MentionLog {
 }
 
 model KeyValue {
-  key   String @id
-  value String
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
 }
