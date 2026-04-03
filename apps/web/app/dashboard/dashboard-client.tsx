@@ -12,6 +12,7 @@ import { SupportTicketsList } from '@/components/support-tickets-list';
 import { ContentQueue } from '@/components/content-queue';
 import { GrowthBriefPreview } from '@/components/growth-brief-preview';
 import { InsightsChat } from '@/components/insights-chat';
+import { MentionsFeed } from '@/components/mentions-feed';
 
 interface Snapshot {
   date: string;
@@ -94,6 +95,19 @@ interface ContentItem {
   createdAt: string;
 }
 
+interface MentionItem {
+  id: string;
+  mentionId: string;
+  authorUsername: string;
+  authorFollowers: number;
+  content: string;
+  category: string;
+  replyDrafted: string | null;
+  replyPosted: boolean;
+  replyTweetId: string | null;
+  processedAt: string;
+}
+
 interface DashboardData {
   creator: {
     id: string;
@@ -109,6 +123,7 @@ interface DashboardData {
   recentRuns: AgentRun[];
   recommendations: Recommendation[];
   contentPieces: ContentItem[];
+  mentions: MentionItem[];
   lastBrief: {
     data: Record<string, unknown>;
     sentAt: string;
@@ -125,10 +140,10 @@ interface DashboardClientProps {
   userEmail: string;
 }
 
-type Tab = 'overview' | 'pricing' | 'support' | 'content' | 'brief' | 'recommendations' | 'ask';
+type Tab = 'overview' | 'pricing' | 'support' | 'content' | 'mentions' | 'brief' | 'recommendations' | 'ask';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
-  const { creator, games, recentRuns, recommendations, contentPieces, lastBrief, stats } = data;
+  const { creator, games, recentRuns, recommendations, contentPieces, mentions, lastBrief, stats } = data;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   const allPriceTests = games.flatMap((g) => g.priceTests);
@@ -142,6 +157,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
     { key: 'pricing', label: 'Pricing', count: allPriceTests.filter((t) => t.status === 'running').length },
     { key: 'support', label: 'Support', count: escalatedCount },
     { key: 'content', label: 'Content', count: draftContentCount },
+    { key: 'mentions', label: 'Mentions', count: mentions.filter((m) => m.category === 'negative').length },
     { key: 'brief', label: 'Growth Brief' },
     { key: 'recommendations', label: 'Recs', count: recommendations.length },
   ];
@@ -274,6 +290,12 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
       {activeTab === 'content' && (
         <div className="mt-8 space-y-6">
           <ContentQueue items={contentPieces} />
+        </div>
+      )}
+
+      {activeTab === 'mentions' && (
+        <div className="mt-8 space-y-6">
+          <MentionsFeed mentions={mentions} />
         </div>
       )}
 

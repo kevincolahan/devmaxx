@@ -76,6 +76,11 @@ export default async function DashboardPage() {
       })
     : null;
 
+  const mentionLogs = await db.mentionLog.findMany({
+    orderBy: { processedAt: 'desc' },
+    take: 50,
+  });
+
   const dashboardData = {
     creator: creator
       ? {
@@ -166,6 +171,18 @@ export default async function DashboardPage() {
           sentAt: lastBriefRun.createdAt.toISOString(),
         }
       : null,
+    mentions: mentionLogs.map((m) => ({
+      id: m.id,
+      mentionId: m.mentionId,
+      authorUsername: m.authorUsername,
+      authorFollowers: m.authorFollowers,
+      content: m.content,
+      category: m.category,
+      replyDrafted: m.replyDrafted,
+      replyPosted: m.replyPosted,
+      replyTweetId: m.replyTweetId,
+      processedAt: m.processedAt.toISOString(),
+    })),
     stats: {
       totalGames: creator?.games.length ?? 0,
       totalRuns,

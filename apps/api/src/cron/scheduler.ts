@@ -12,6 +12,7 @@ import { postTweet } from '../lib/twitter';
 import { postToLinkedIn } from '../lib/linkedin';
 import { postToTikTok } from '../lib/tiktok';
 import { createInstagramPost } from '../lib/instagram';
+import { runMentionsResponsePipeline } from '../agents/mentions-response';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -418,6 +419,21 @@ export function startScheduler() {
   // RobloxNewsMonitor — 6am UTC Monday (weekly news scan → content)
   cron.schedule('0 6 * * 1', guardedJob('NewsMonitor', runNewsMonitor), { timezone: 'UTC' });
 
+  // MentionsResponse — every 2 hours (monitor @devmaxxapp mentions)
+  cron.schedule('0 */2 * * *', guardedJob('MentionsResponse', async () => {
+    log('MentionsResponse', 'Starting mentions scan');
+    try {
+      const result = await withTimeout(
+        runMentionsResponsePipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'MentionsResponse'
+      );
+      log('MentionsResponse', `Done — processed: ${result.mentionsProcessed}, replied: ${result.repliesPosted}, flagged: ${result.flaggedNegative}`);
+    } catch (err) {
+      log('MentionsResponse', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
@@ -430,4 +446,5 @@ export function startScheduler() {
   console.log('  SocialPoster:X       — 0 10 * * *   (10am UTC daily)');
   console.log('  SocialPoster:LI      — 0 11 * * *   (11am UTC daily)');
   console.log('  SocialPoster:IG      — 0 12 * * *   (12pm UTC daily)');
+  console.log('  MentionsResponse     — 0 */2 * * *  (every 2 hours)');
 }
