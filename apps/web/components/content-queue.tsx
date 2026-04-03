@@ -51,33 +51,25 @@ function getStatusStyle(status: string): string {
     case 'approved': return 'text-green-400 bg-green-400/10';
     case 'rejected': return 'text-red-400 bg-red-400/10';
     case 'published': return 'text-blue-400 bg-blue-400/10';
-    case 'pending_review': return 'text-amber-400 bg-amber-400/10';
+    case 'draft': return 'text-gray-400 bg-gray-400/10';
     default: return 'text-gray-400 bg-gray-400/10';
   }
 }
 
-type FilterStatus = 'all' | 'draft' | 'pending_review' | 'approved' | 'published' | 'rejected';
+function getStatusLabel(status: string): string {
+  if (status === 'approved' || status === 'draft') return 'Queued';
+  if (status === 'published') return 'Published';
+  if (status === 'rejected') return 'Rejected';
+  return status;
+}
+
+type FilterStatus = 'all' | 'queued' | 'published' | 'rejected';
 
 export function ContentQueue({ items }: ContentQueueProps) {
   const [localItems, setLocalItems] = useState(items);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [postingId, setPostingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>('all');
-
-  async function handleStatusUpdate(id: string, status: 'approved' | 'rejected' | 'published') {
-    try {
-      await fetch('/api/content/status', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, status }),
-      });
-      setLocalItems((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status } : item))
-      );
-    } catch (err) {
-      console.error('Failed to update content status:', err);
-    }
-  }
 
   async function handleCopy(id: string, text: string) {
     try {
@@ -165,13 +157,13 @@ export function ContentQueue({ items }: ContentQueueProps) {
 
   const filteredItems = filter === 'all'
     ? localItems
-    : localItems.filter((item) => item.status === filter);
+    : filter === 'queued'
+      ? localItems.filter((item) => item.status === 'approved' || item.status === 'draft')
+      : localItems.filter((item) => item.status === filter);
 
   const counts = {
     all: localItems.length,
-    draft: localItems.filter((i) => i.status === 'draft').length,
-    pending_review: localItems.filter((i) => i.status === 'pending_review').length,
-    approved: localItems.filter((i) => i.status === 'approved').length,
+    queued: localItems.filter((i) => i.status === 'approved' || i.status === 'draft').length,
     published: localItems.filter((i) => i.status === 'published').length,
     rejected: localItems.filter((i) => i.status === 'rejected').length,
   };
@@ -192,7 +184,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
       <div className="mb-4 flex items-center justify-between">
         <h3 className="font-semibold text-white">Content Queue</h3>
         <div className="flex gap-1">
-          {(['all', 'draft', 'pending_review', 'approved', 'published', 'rejected'] as FilterStatus[]).map((f) => (
+          {(['all', 'queued', 'published', 'rejected'] as FilterStatus[]).map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
@@ -202,7 +194,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
                   : 'text-gray-500 hover:text-gray-300'
               }`}
             >
-              {f === 'pending_review' ? 'Review' : f.charAt(0).toUpperCase() + f.slice(1)}
+              {f.charAt(0).toUpperCase() + f.slice(1)}
               {counts[f] > 0 && (
                 <span className="ml-1 text-gray-500">{counts[f]}</span>
               )}
@@ -217,7 +209,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
           const isXPost = item.platform === 'x';
           const charCount = item.content.length;
           const isOverLimit = isXPost && charCount > 280;
-          const canPost = (item.status === 'approved' || item.status === 'draft' || item.status === 'pending_review');
+          const canPost = item.status !== 'published' && item.status !== 'rejected';
           const canPostToX = isXPost && !isOverLimit && canPost;
           const canPostToLinkedIn = item.platform === 'linkedin' && canPost;
           const canPostToTikTok = item.platform === 'tiktok' && canPost;
@@ -246,7 +238,7 @@ export function ContentQueue({ items }: ContentQueueProps) {
                   </span>
                 </div>
                 <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getStatusStyle(item.status)}`}>
-                  {item.status}
+                  {getStatusLabel(item.status)}
                 </span>
               </div>
 
@@ -316,24 +308,6 @@ export function ContentQueue({ items }: ContentQueueProps) {
                   {copiedId === item.id ? 'Copied!' : 'Copy'}
                 </button>
 
-                {/* Draft / Pending Review actions: Approve / Reject */}
-                {(item.status === 'draft' || item.status === 'pending_review') && (
-                  <>
-                    <button
-                      onClick={() => handleStatusUpdate(item.id, 'approved')}
-                      className="rounded-md bg-green-600/20 px-3 py-1.5 text-xs font-medium text-green-400 hover:bg-green-600/30"
-                    >
-                      Approve
-                    </button>
-                    <button
-                      onClick={() => handleStatusUpdate(item.id, 'rejected')}
-                      className="rounded-md bg-red-600/20 px-3 py-1.5 text-xs font-medium text-red-400 hover:bg-red-600/30"
-                    >
-                      Reject
-                    </button>
-                  </>
-                )}
-
                 {/* Direct post buttons per platform */}
                 {canPostToX && (
                   <button
@@ -379,16 +353,6 @@ export function ContentQueue({ items }: ContentQueueProps) {
                     className="rounded-md bg-blue-600/20 px-3 py-1.5 text-xs font-medium text-blue-400 hover:bg-blue-600/30"
                   >
                     Copy & Open {platformInfo!.label}
-                  </button>
-                )}
-
-                {/* Mark as Posted — for approved items (manual posting confirmation) */}
-                {item.status === 'approved' && (
-                  <button
-                    onClick={() => handleStatusUpdate(item.id, 'published')}
-                    className="rounded-md bg-brand-500/20 px-3 py-1.5 text-xs font-medium text-brand-400 hover:bg-brand-500/30"
-                  >
-                    Mark as Posted
                   </button>
                 )}
               </div>

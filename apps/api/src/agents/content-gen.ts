@@ -127,7 +127,7 @@ Respond ONLY with valid JSON:
           platform: piece.platform,
           content: piece.content,
           qualityScore: piece.qualityScore,
-          status: piece.platform ? 'draft' : 'draft',
+          status: piece.qualityScore >= 7 ? 'approved' : 'draft',
           sourceData: {
             agentName: this.agentName,
             generatedAt: new Date().toISOString(),

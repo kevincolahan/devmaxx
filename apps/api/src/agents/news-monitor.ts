@@ -413,6 +413,10 @@ Content opportunity: ${article.opportunityScore}/10`,
 
         let piecesCreated = 0;
 
+        const avgScore = Math.round((article.relevanceScore + article.opportunityScore) / 2);
+        // Auto-approve content scoring 7+ on average, otherwise draft
+        const autoStatus = avgScore >= 7 ? 'approved' : 'draft';
+
         // Blog article
         await db.contentPiece.create({
           data: {
@@ -420,8 +424,8 @@ Content opportunity: ${article.opportunityScore}/10`,
             type: 'news_response',
             platform: 'blog',
             content: `# ${generated.blogTitle}\n\n${generated.blogBody}`,
-            qualityScore: Math.round((article.relevanceScore + article.opportunityScore) / 2),
-            status: 'pending_review',
+            qualityScore: avgScore,
+            status: autoStatus,
             sourceData,
           },
         });
@@ -437,8 +441,8 @@ Content opportunity: ${article.opportunityScore}/10`,
                 type: 'news_response',
                 platform: 'x',
                 content: tweet,
-                qualityScore: Math.round((article.relevanceScore + article.opportunityScore) / 2),
-                status: 'pending_review',
+                qualityScore: avgScore,
+                status: autoStatus,
                 sourceData: { ...sourceData, threadPosition: i + 1, threadTotal: generated.twitterThread.length },
               },
             });
@@ -453,8 +457,8 @@ Content opportunity: ${article.opportunityScore}/10`,
             type: 'news_response',
             platform: 'linkedin',
             content: generated.linkedinPost,
-            qualityScore: Math.round((article.relevanceScore + article.opportunityScore) / 2),
-            status: 'pending_review',
+            qualityScore: avgScore,
+            status: autoStatus,
             sourceData,
           },
         });
@@ -467,8 +471,8 @@ Content opportunity: ${article.opportunityScore}/10`,
             type: 'news_response',
             platform: 'tiktok',
             content: generated.tiktokScript,
-            qualityScore: Math.round((article.relevanceScore + article.opportunityScore) / 2),
-            status: 'pending_review',
+            qualityScore: avgScore,
+            status: autoStatus,
             sourceData,
           },
         });

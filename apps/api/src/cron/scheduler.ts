@@ -410,8 +410,10 @@ export function startScheduler() {
   // MonetizationAdvisor — 9am UTC 1st of month
   cron.schedule('0 9 1 * *', guardedJob('MonetizationAdvisor', runMonetizationAdvisor), { timezone: 'UTC' });
 
-  // SocialPoster — 10am UTC daily (auto-posts approved X content)
-  cron.schedule('0 10 * * *', guardedJob('SocialPoster', runSocialPoster), { timezone: 'UTC' });
+  // SocialPoster — staggered daily auto-posting per platform
+  cron.schedule('0 10 * * *', guardedJob('SocialPoster:X', () => postOnePiece('x', postTweet).then(() => {})), { timezone: 'UTC' });
+  cron.schedule('0 11 * * *', guardedJob('SocialPoster:LinkedIn', () => postOnePiece('linkedin', postToLinkedIn).then(() => {})), { timezone: 'UTC' });
+  cron.schedule('0 12 * * *', guardedJob('SocialPoster:Instagram', () => postOnePiece('instagram', createInstagramPost).then(() => {})), { timezone: 'UTC' });
 
   // RobloxNewsMonitor — 6am UTC Monday (weekly news scan → content)
   cron.schedule('0 6 * * 1', guardedJob('NewsMonitor', runNewsMonitor), { timezone: 'UTC' });
@@ -425,5 +427,7 @@ export function startScheduler() {
   console.log('  ContentGeneration    — 0 7 * * 1    (7am UTC Monday)');
   console.log('  GrowthBrief          — 0 18 * * 0   (6pm UTC Sunday)');
   console.log('  MonetizationAdvisor  — 0 9 1 * *    (9am UTC 1st of month)');
-  console.log('  SocialPoster         — 0 10 * * *   (10am UTC daily)');
+  console.log('  SocialPoster:X       — 0 10 * * *   (10am UTC daily)');
+  console.log('  SocialPoster:LI      — 0 11 * * *   (11am UTC daily)');
+  console.log('  SocialPoster:IG      — 0 12 * * *   (12pm UTC daily)');
 }
