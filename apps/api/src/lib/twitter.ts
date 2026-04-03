@@ -10,10 +10,10 @@ interface TwitterConfig {
 }
 
 function getConfig(): TwitterConfig {
-  const apiKey = process.env.TWITTER_API_KEY;
-  const apiSecret = process.env.TWITTER_API_SECRET;
-  const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-  const accessSecret = process.env.TWITTER_ACCESS_SECRET;
+  const apiKey = (process.env.TWITTER_API_KEY || '').trim();
+  const apiSecret = (process.env.TWITTER_API_SECRET || '').trim();
+  const accessToken = (process.env.TWITTER_ACCESS_TOKEN || '').trim();
+  const accessSecret = (process.env.TWITTER_ACCESS_SECRET || '').trim();
 
   if (!apiKey || !apiSecret || !accessToken || !accessSecret) {
     const missing = [
@@ -37,28 +37,44 @@ function percentEncode(str: string): string {
     .replace(/\)/g, '%29');
 }
 
+function generateNonce(): string {
+  // Twitter expects alphanumeric nonce — 32 hex chars
+  return randomBytes(32).toString('hex').slice(0, 32);
+}
+
 function generateOAuthSignature(
   method: string,
   url: string,
   params: Record<string, string>,
   config: TwitterConfig
 ): string {
+  // Sort parameters alphabetically by key
   const sortedParams = Object.keys(params)
     .sort()
     .map((key) => `${percentEncode(key)}=${percentEncode(params[key])}`)
     .join('&');
 
+  // Build signature base string: METHOD&url&params (each percent-encoded)
   const signatureBase = [
     method.toUpperCase(),
     percentEncode(url),
     percentEncode(sortedParams),
   ].join('&');
 
+  // Signing key: consumer_secret&token_secret (both percent-encoded)
   const signingKey = `${percentEncode(config.apiSecret)}&${percentEncode(config.accessSecret)}`;
 
-  return createHmac('sha1', signingKey)
+  const signature = createHmac('sha1', signingKey)
     .update(signatureBase)
     .digest('base64');
+
+  console.log(`[Twitter OAuth] Method: ${method}`);
+  console.log(`[Twitter OAuth] URL: ${url}`);
+  console.log(`[Twitter OAuth] Signature base length: ${signatureBase.length}`);
+  console.log(`[Twitter OAuth] Consumer key: ${config.apiKey.slice(0, 6)}...`);
+  console.log(`[Twitter OAuth] Token: ${config.accessToken.slice(0, 6)}...`);
+
+  return signature;
 }
 
 function buildAuthorizationHeader(
@@ -66,11 +82,14 @@ function buildAuthorizationHeader(
   url: string,
   config: TwitterConfig
 ): string {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const nonce = generateNonce();
+
   const oauthParams: Record<string, string> = {
     oauth_consumer_key: config.apiKey,
-    oauth_nonce: randomBytes(16).toString('hex'),
+    oauth_nonce: nonce,
     oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+    oauth_timestamp: timestamp,
     oauth_token: config.accessToken,
     oauth_version: '1.0',
   };
@@ -78,6 +97,7 @@ function buildAuthorizationHeader(
   const signature = generateOAuthSignature(method, url, oauthParams, config);
   oauthParams.oauth_signature = signature;
 
+  // Build header: sorted, percent-encoded key="value" pairs
   const headerParts = Object.keys(oauthParams)
     .sort()
     .map((key) => `${percentEncode(key)}="${percentEncode(oauthParams[key])}"`)
@@ -97,6 +117,7 @@ export interface TwitterTestResult {
   error?: string;
   httpStatus?: number;
   rawResponse?: string;
+  keyLengths?: Record<string, number>;
 }
 
 export async function testTwitterCredentials(): Promise<TwitterTestResult> {
@@ -112,7 +133,19 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
     return { credentialsConfigured: false, missing: [], error: String(err) };
   }
 
-  // Call GET /2/users/me to verify OAuth without posting
+  // Log key lengths to detect whitespace/corruption without exposing secrets
+  const keyLengths = {
+    apiKey: config.apiKey.length,
+    apiSecret: config.apiSecret.length,
+    accessToken: config.accessToken.length,
+    accessSecret: config.accessSecret.length,
+  };
+  console.log('[Twitter Test] Key lengths:', keyLengths);
+
+  // Use GET /2/users/me to verify OAuth
+  // Note: This endpoint requires Basic tier ($100/mo).
+  // On Free tier, this will return 401/403 even with valid credentials.
+  // The only Free tier endpoint is POST /2/tweets.
   const url = 'https://api.twitter.com/2/users/me';
   const authorization = buildAuthorizationHeader('GET', url, config);
 
@@ -132,6 +165,7 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
         httpStatus: response.status,
         error: `Twitter API ${response.status}: ${body}`,
         rawResponse: body,
+        keyLengths,
       };
     }
 
@@ -144,6 +178,7 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
       httpStatus: 200,
       userId: data.data?.id,
       username: data.data?.username,
+      keyLengths,
     };
   } catch (err) {
     return {
@@ -151,6 +186,7 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
       missing: [],
       apiReachable: false,
       error: `Network error: ${String(err)}`,
+      keyLengths,
     };
   }
 }
