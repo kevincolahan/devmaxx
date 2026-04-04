@@ -8,22 +8,22 @@ async function getPersonId(accessToken: string): Promise<string> {
 
   if (cachedPersonId) return cachedPersonId;
 
-  console.log('[LinkedIn] Fetching person ID from /v2/me');
-  const res = await fetch('https://api.linkedin.com/v2/me', {
+  console.log('[LinkedIn] Fetching person ID from /v2/userinfo');
+  const res = await fetch('https://api.linkedin.com/v2/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`LinkedIn /v2/me failed (${res.status}): ${body}`);
+    throw new Error(`LinkedIn /v2/userinfo failed (${res.status}): ${body}`);
   }
 
-  const data = (await res.json()) as { id?: string };
-  if (!data.id) throw new Error('LinkedIn /v2/me returned no id field');
+  const data = (await res.json()) as { sub?: string };
+  if (!data.sub) throw new Error('LinkedIn /v2/userinfo returned no sub field');
 
-  cachedPersonId = data.id;
-  console.log(`[LinkedIn] Resolved person ID: ${data.id}`);
-  return data.id;
+  cachedPersonId = data.sub;
+  console.log(`[LinkedIn] Resolved person ID: ${data.sub}`);
+  return data.sub;
 }
 
 export interface LinkedInResult {
@@ -51,7 +51,7 @@ export async function postToLinkedIn(text: string): Promise<LinkedInResult> {
     return { success: false, error: String(err) };
   }
 
-  const authorUrn = `urn:li:person:${personId}`;
+  const authorUrn = personId.startsWith('urn:') ? personId : `urn:li:person:${personId}`;
 
   const body = {
     author: authorUrn,
