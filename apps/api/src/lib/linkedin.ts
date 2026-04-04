@@ -86,7 +86,7 @@ export async function postToLinkedIn(text: string): Promise<LinkedInResult> {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
-        'LinkedIn-Version': '202401',
+        'LinkedIn-Version': '202404',
         'X-Restli-Protocol-Version': '2.0.0',
       },
       body: JSON.stringify(body),
