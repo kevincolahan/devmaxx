@@ -3,7 +3,7 @@ export const dynamic = 'force-dynamic';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 
-// ─── LinkedIn Member Posting (inline for Vercel) ─────────────
+// ─── LinkedIn Member Posting via v2 UGC Posts API ────────────
 
 let cachedPersonId: string | null = null;
 
@@ -13,20 +13,22 @@ async function getPersonId(accessToken: string): Promise<string> {
 
   if (cachedPersonId) return cachedPersonId;
 
-  const res = await fetch('https://api.linkedin.com/v2/userinfo', {
+  console.log('[post-linkedin] Fetching person ID from /v2/me');
+  const res = await fetch('https://api.linkedin.com/v2/me', {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`LinkedIn userinfo failed (${res.status}): ${body}`);
+    throw new Error(`LinkedIn /v2/me failed (${res.status}): ${body}`);
   }
 
-  const data = (await res.json()) as { sub?: string };
-  if (!data.sub) throw new Error('LinkedIn userinfo returned no sub field');
+  const data = (await res.json()) as { id?: string };
+  if (!data.id) throw new Error('LinkedIn /v2/me returned no id field');
 
-  cachedPersonId = data.sub;
-  return data.sub;
+  cachedPersonId = data.id;
+  console.log(`[post-linkedin] Resolved person ID: ${data.id}`);
+  return data.id;
 }
 
 // ─── Route Handler ───────────────────────────────────────────
@@ -57,41 +59,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: String(err) }, { status: 502 });
   }
 
-  const authorUrn = personId.startsWith('urn:') ? personId : `urn:li:person:${personId}`;
+  const authorUrn = `urn:li:person:${personId}`;
 
   const body = {
     author: authorUrn,
-    commentary: text,
-    visibility: 'PUBLIC',
-    distribution: {
-      feedDistribution: 'MAIN_FEED',
-      targetEntities: [],
-      thirdPartyDistributionChannels: [],
-    },
     lifecycleState: 'PUBLISHED',
-    isReshareDisabledByAuthor: false,
+    specificContent: {
+      'com.linkedin.ugc.ShareContent': {
+        shareCommentary: {
+          text,
+        },
+        shareMediaCategory: 'NONE',
+      },
+    },
+    visibility: {
+      'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+    },
   };
 
-  const linkedInVersion = '202306';
-  console.log(`[post-linkedin] Posting as ${authorUrn} (${text.length} chars), version=${linkedInVersion}`);
-
-  const headers: Record<string, string> = {
-    'Authorization': `Bearer ${accessToken}`,
-    'Content-Type': 'application/json',
-    'LinkedIn-Version': linkedInVersion,
-    'X-Restli-Protocol-Version': '2.0.0',
-  };
-  console.log('[post-linkedin] Request headers:', JSON.stringify(headers));
+  console.log(`[post-linkedin] Posting as ${authorUrn} (${text.length} chars) to /v2/ugcPosts`);
 
   try {
-    const response = await fetch('https://api.linkedin.com/rest/posts', {
+    const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
       method: 'POST',
-      headers,
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0',
+      },
       body: JSON.stringify(body),
     });
 
     console.log(`[post-linkedin] Response status: ${response.status}`);
-    console.log(`[post-linkedin] Response headers:`, Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorBody = await response.text();
