@@ -119,9 +119,37 @@ export function ContentQueue({ items }: ContentQueueProps) {
       return;
     }
 
+    // LinkedIn posts go directly via Vercel (same as Twitter)
+    if (platform === 'linkedin') {
+      setPostingId(id);
+      try {
+        const res = await fetch('/api/social/post-linkedin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: item.content, contentPieceId: id }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          alert(`Failed to post to LinkedIn: ${data.error}`);
+          return;
+        }
+
+        setLocalItems((prev) =>
+          prev.map((i) => (i.id === id ? { ...i, status: 'published' } : i))
+        );
+      } catch (err) {
+        console.error('Failed to post to LinkedIn:', err);
+        alert('Failed to post to LinkedIn. Check console for details.');
+      } finally {
+        setPostingId(null);
+      }
+      return;
+    }
+
     // Other platforms go through Railway API proxy
     const routes: Record<string, string> = {
-      linkedin: '/api/content/post-to-linkedin',
       tiktok: '/api/content/post-to-tiktok',
       instagram: '/api/content/post-to-instagram',
     };
