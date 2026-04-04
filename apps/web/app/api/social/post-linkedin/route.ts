@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'text is required' }, { status: 400 });
   }
 
-  const accessToken = (process.env.LINKEDIN_ACCESS_TOKEN || '').trim();
+  const accessToken = process.env.LINKEDIN_ACCESS_TOKEN?.trim();
+  console.log('[post-linkedin] LinkedIn token prefix:', accessToken?.slice(0, 10));
   if (!accessToken) {
     return NextResponse.json({ error: 'Missing LINKEDIN_ACCESS_TOKEN' }, { status: 503 });
   }
