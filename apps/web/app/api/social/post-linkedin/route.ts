@@ -72,17 +72,21 @@ export async function POST(req: NextRequest) {
     isReshareDisabledByAuthor: false,
   };
 
-  console.log(`[post-linkedin] Posting as ${authorUrn} (${text.length} chars)`);
+  const linkedInVersion = '202306';
+  console.log(`[post-linkedin] Posting as ${authorUrn} (${text.length} chars), version=${linkedInVersion}`);
+
+  const headers: Record<string, string> = {
+    'Authorization': `Bearer ${accessToken}`,
+    'Content-Type': 'application/json',
+    'LinkedIn-Version': linkedInVersion,
+    'X-Restli-Protocol-Version': '2.0.0',
+  };
+  console.log('[post-linkedin] Request headers:', JSON.stringify(headers));
 
   try {
     const response = await fetch('https://api.linkedin.com/rest/posts', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json',
-        'LinkedIn-Version': '202405',
-        'X-Restli-Protocol-Version': '2.0.0',
-      },
+      headers,
       body: JSON.stringify(body),
     });
 
