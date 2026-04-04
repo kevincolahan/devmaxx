@@ -75,11 +75,10 @@ export async function POST(req: NextRequest) {
   console.log(`[post-linkedin] Posting as ${authorUrn} (${text.length} chars)`);
 
   try {
-    // Try with LinkedIn-Version header first
-    let response = await fetch('https://api.linkedin.com/rest/posts', {
+    const response = await fetch('https://api.linkedin.com/rest/posts', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
         'LinkedIn-Version': '202501',
         'X-Restli-Protocol-Version': '2.0.0',
@@ -87,45 +86,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    // If 426 (version not found), retry without LinkedIn-Version header
-    if (response.status === 426) {
-      console.log('[post-linkedin] Got 426, retrying without LinkedIn-Version header');
-      response = await fetch('https://api.linkedin.com/rest/posts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'X-Restli-Protocol-Version': '2.0.0',
-        },
-        body: JSON.stringify(body),
-      });
-    }
-
-    // If still 426, try the v2/ugcPosts endpoint as final fallback
-    if (response.status === 426) {
-      console.log('[post-linkedin] Still 426, falling back to v2/ugcPosts');
-      response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-          'X-Restli-Protocol-Version': '2.0.0',
-        },
-        body: JSON.stringify({
-          author: authorUrn,
-          lifecycleState: 'PUBLISHED',
-          specificContent: {
-            'com.linkedin.ugc.ShareContent': {
-              shareCommentary: { text },
-              shareMediaCategory: 'NONE',
-            },
-          },
-          visibility: {
-            'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
-          },
-        }),
-      });
-    }
+    console.log(`[post-linkedin] Response status: ${response.status}`);
+    console.log(`[post-linkedin] Response headers:`, Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorBody = await response.text();
