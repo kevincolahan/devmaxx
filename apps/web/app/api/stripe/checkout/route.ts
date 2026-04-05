@@ -41,30 +41,59 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    let customerId = creator.stripeId;
+    const sessionParams = {
+      mode: 'subscription' as const,
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${req.nextUrl.origin}/dashboard?upgraded=true`,
+      cancel_url: `${req.nextUrl.origin}/pricing`,
+      metadata: { creatorId: creator.id, plan },
+    };
 
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: session.user.email,
-        metadata: { creatorId: creator.id },
+    let checkoutSession;
+
+    if (creator.stripeId) {
+      // Try with existing customer ID
+      try {
+        console.log(`[stripe/checkout] Using existing customer: ${creator.stripeId}`);
+        checkoutSession = await stripe.checkout.sessions.create({
+          customer: creator.stripeId,
+          ...sessionParams,
+        });
+      } catch (err: any) {
+        // If customer doesn't exist (wrong mode or deleted), fall back to email
+        if (err?.code === 'resource_missing' || err?.statusCode === 404 || String(err).includes('No such customer')) {
+          console.log(`[stripe/checkout] Customer ${creator.stripeId} not found, clearing and using email`);
+          await db.creator.update({
+            where: { id: creator.id },
+            data: { stripeId: null },
+          });
+          checkoutSession = await stripe.checkout.sessions.create({
+            customer_email: session.user.email,
+            ...sessionParams,
+          });
+        } else {
+          throw err;
+        }
+      }
+    } else {
+      // No customer ID, use email
+      console.log(`[stripe/checkout] No customer ID, using email: ${session.user.email}`);
+      checkoutSession = await stripe.checkout.sessions.create({
+        customer_email: session.user.email,
+        ...sessionParams,
       });
-      customerId = customer.id;
+    }
+
+    // Save new customer ID from checkout session if created
+    if (checkoutSession.customer && !creator.stripeId) {
+      const customerId = typeof checkoutSession.customer === 'string'
+        ? checkoutSession.customer
+        : checkoutSession.customer.id;
       await db.creator.update({
         where: { id: creator.id },
         data: { stripeId: customerId },
       });
     }
-
-    console.log(`[stripe/checkout] Creating session for customer ${customerId}, price ${priceId}`);
-
-    const checkoutSession = await stripe.checkout.sessions.create({
-      customer: customerId,
-      mode: 'subscription',
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${req.nextUrl.origin}/dashboard?upgraded=true`,
-      cancel_url: `${req.nextUrl.origin}/pricing`,
-      metadata: { creatorId: creator.id, plan },
-    });
 
     return NextResponse.json({ url: checkoutSession.url });
   } catch (err) {
