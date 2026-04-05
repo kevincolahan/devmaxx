@@ -69,22 +69,42 @@ const tiers = [
 
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleCheckout(plan: string) {
-    if (plan === 'free') return;
-    setLoading(plan);
-
-    const res = await fetch('/api/stripe/checkout', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ plan }),
-    });
-
-    const data = await res.json();
-    if (data.url) {
-      window.location.href = data.url;
+    if (plan === 'free') {
+      window.location.href = '/login';
+      return;
     }
-    setLoading(null);
+
+    setLoading(plan);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/stripe/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || `Checkout failed (${res.status})`);
+        setLoading(null);
+        return;
+      }
+
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        setError('No checkout URL returned');
+        setLoading(null);
+      }
+    } catch (err) {
+      setError(`Network error: ${String(err)}`);
+      setLoading(null);
+    }
   }
 
   return (
@@ -95,6 +115,13 @@ export default function PricingPage() {
           Choose the plan that fits your studio.
         </p>
       </div>
+
+      {error && (
+        <div className="mx-auto mt-6 max-w-md rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-center text-sm text-red-400">
+          {error}
+        </div>
+      )}
+
       <div className="mt-12 grid gap-6 md:grid-cols-4">
         {tiers.map((tier) => (
           <div

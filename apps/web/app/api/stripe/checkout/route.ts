@@ -11,45 +11,67 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { plan } = (await req.json()) as { plan: 'creator' | 'pro' | 'studio' };
+  const { plan } = (await req.json()) as { plan: string };
 
-  const planConfig = PLANS[plan];
-  if (!planConfig || !planConfig.stripePriceId) {
-    return NextResponse.json({ error: 'Invalid plan' }, { status: 400 });
+  if (!plan || !(plan in PLANS) || plan === 'free') {
+    return NextResponse.json({ error: `Invalid plan: ${plan}` }, { status: 400 });
   }
 
-  let creator = await db.creator.findUnique({
-    where: { email: session.user.email },
-  });
+  const planConfig = PLANS[plan as keyof typeof PLANS];
+  const priceId = planConfig.stripePriceId;
 
-  if (!creator) {
-    creator = await db.creator.create({
-      data: { email: session.user.email },
-    });
+  console.log(`[stripe/checkout] Plan: ${plan}, Price ID: ${priceId || 'MISSING'}`);
+
+  if (!priceId) {
+    console.error(`[stripe/checkout] STRIPE_PRICE_${plan.toUpperCase()} env var is not set`);
+    return NextResponse.json(
+      { error: `Stripe price not configured for ${plan} plan. Set STRIPE_PRICE_${plan.toUpperCase()} env var.` },
+      { status: 503 }
+    );
   }
 
-  let customerId = creator.stripeId;
+  try {
+    let creator = await db.creator.findUnique({
+      where: { email: session.user.email },
+    });
 
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: session.user.email,
-      metadata: { creatorId: creator.id },
+    if (!creator) {
+      creator = await db.creator.create({
+        data: { email: session.user.email },
+      });
+    }
+
+    let customerId = creator.stripeId;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: session.user.email,
+        metadata: { creatorId: creator.id },
+      });
+      customerId = customer.id;
+      await db.creator.update({
+        where: { id: creator.id },
+        data: { stripeId: customerId },
+      });
+    }
+
+    console.log(`[stripe/checkout] Creating session for customer ${customerId}, price ${priceId}`);
+
+    const checkoutSession = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'subscription',
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${req.nextUrl.origin}/dashboard?upgraded=true`,
+      cancel_url: `${req.nextUrl.origin}/pricing`,
+      metadata: { creatorId: creator.id, plan },
     });
-    customerId = customer.id;
-    await db.creator.update({
-      where: { id: creator.id },
-      data: { stripeId: customerId },
-    });
+
+    return NextResponse.json({ url: checkoutSession.url });
+  } catch (err) {
+    console.error('[stripe/checkout] Error:', err);
+    return NextResponse.json(
+      { error: `Stripe checkout failed: ${String(err)}` },
+      { status: 500 }
+    );
   }
-
-  const checkoutSession = await stripe.checkout.sessions.create({
-    customer: customerId,
-    mode: 'subscription',
-    line_items: [{ price: planConfig.stripePriceId, quantity: 1 }],
-    success_url: `${req.nextUrl.origin}/dashboard?upgraded=true`,
-    cancel_url: `${req.nextUrl.origin}/pricing`,
-    metadata: { creatorId: creator.id, plan },
-  });
-
-  return NextResponse.json({ url: checkoutSession.url });
 }
