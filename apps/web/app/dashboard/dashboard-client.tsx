@@ -15,6 +15,7 @@ import { GrowthBriefPreview } from '@/components/growth-brief-preview';
 import { InsightsChat } from '@/components/insights-chat';
 import { MentionsFeed } from '@/components/mentions-feed';
 import { CommunityOutreach } from '@/components/community-outreach';
+import { CommandConsole } from '@/components/command-console';
 
 interface Snapshot {
   date: string;
@@ -146,7 +147,7 @@ interface DashboardClientProps {
   userEmail: string;
 }
 
-type Tab = 'overview' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'ask';
+type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'ask';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
   const { creator, games, recentRuns, recommendations, contentPieces, mentions, communityLastPost, communityPostHistory, lastBrief, stats } = data;
@@ -169,6 +170,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: 'overview', label: 'Overview' },
+    { key: 'commands', label: 'Commands' },
     { key: 'ask', label: 'Ask Devmaxx' },
     { key: 'pricing', label: 'Pricing', count: allPriceTests.filter((t) => t.status === 'running').length },
     { key: 'support', label: 'Support', count: escalatedCount },
@@ -296,6 +298,12 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
             <AgentRunFeed runs={recentRuns} />
           </div>
         </>
+      )}
+
+      {activeTab === 'commands' && creator && (
+        <div className="mt-8">
+          <CommandConsole creatorId={creator.id} gameId={games[0]?.id} />
+        </div>
       )}
 
       {activeTab === 'ask' && (
