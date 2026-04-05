@@ -21,6 +21,7 @@ import { contentRouter } from './routes/content';
 import { growthBriefRouter } from './routes/growth-brief';
 import { actionsRouter } from './routes/actions';
 import { commandsRouter } from './routes/commands';
+import { onboardingRouter } from './routes/onboarding';
 import { startScheduler } from './cron/scheduler';
 
 const app = express();
@@ -50,6 +51,7 @@ app.use('/api/content', contentRouter);
 app.use('/api/growth-brief', growthBriefRouter);
 app.use('/api/actions', actionsRouter);
 app.use('/api/commands', commandsRouter);
+app.use('/api/onboarding', onboardingRouter);
 
 async function startup() {
   // Verify DB connection before accepting traffic

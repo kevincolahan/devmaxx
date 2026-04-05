@@ -16,6 +16,7 @@ import { runMentionsResponsePipeline } from '../agents/mentions-response';
 import { runCommunityOutreachPipeline } from '../agents/community-outreach';
 import { runOutcomeTrackingPipeline } from '../agents/outcome-tracking';
 import { checkSaleRestorations } from '../agents/command-executor';
+import { runOnboardingEmails } from '../lib/onboarding-emails';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -452,6 +453,17 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // OnboardingEmails — daily 9am UTC
+  cron.schedule('0 9 * * *', guardedJob('OnboardingEmails', async () => {
+    log('OnboardingEmails', 'Checking for day 3 + day 7 emails');
+    try {
+      const result = await runOnboardingEmails(db);
+      log('OnboardingEmails', `Done — day3: ${result.day3Sent}, day7: ${result.day7Sent}`);
+    } catch (err) {
+      log('OnboardingEmails', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   // SaleRestore — every hour (check for expired sales)
   cron.schedule('0 * * * *', guardedJob('SaleRestore', async () => {
     try {
@@ -491,6 +503,7 @@ export function startScheduler() {
   console.log('  SocialPoster:IG      — 0 12 * * *   (12pm UTC daily)');
   console.log('  MentionsResponse     — 0 */2 * * *  (every 2 hours)');
   console.log('  CommunityOutreach    — 0 14 * * 3  (2pm UTC Wednesday)');
+  console.log('  OnboardingEmails     — 0 9 * * *   (9am UTC daily)');
   console.log('  SaleRestore          — 0 * * * *   (every hour)');
   console.log('  OutcomeTracking      — 0 7 * * *   (7am UTC daily)');
 }
