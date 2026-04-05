@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { HealthScoreCard } from '@/components/health-score-card';
 import { DauChart } from '@/components/dau-chart';
 import { AgentRunFeed } from '@/components/agent-run-feed';
@@ -145,6 +146,16 @@ type Tab = 'overview' | 'pricing' | 'support' | 'content' | 'mentions' | 'brief'
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
   const { creator, games, recentRuns, recommendations, contentPieces, mentions, lastBrief, stats } = data;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const searchParams = useSearchParams();
+  const [showUpgradeMessage, setShowUpgradeMessage] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('upgraded') === 'true') {
+      setShowUpgradeMessage(true);
+      const timer = setTimeout(() => setShowUpgradeMessage(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [searchParams]);
 
   const allPriceTests = games.flatMap((g) => g.priceTests);
   const allTickets = games.flatMap((g) => g.tickets);
@@ -175,6 +186,18 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
           </span>
         )}
       </div>
+
+      {/* Upgrade success message */}
+      {showUpgradeMessage && creator && (
+        <div className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-center">
+          <p className="text-lg font-semibold text-green-400">
+            Welcome to the {creator.plan.charAt(0).toUpperCase() + creator.plan.slice(1)} plan!
+          </p>
+          <p className="mt-1 text-sm text-green-300/70">
+            All agents are now active. Your games are being optimized.
+          </p>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="mt-8 grid gap-6 md:grid-cols-3">
