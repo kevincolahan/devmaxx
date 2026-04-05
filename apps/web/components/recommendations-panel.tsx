@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 interface Recommendation {
   id: string;
   content: string;
@@ -10,6 +12,8 @@ interface Recommendation {
 
 interface RecommendationsPanelProps {
   recommendations: Recommendation[];
+  creatorId: string;
+  gameId?: string;
 }
 
 interface ParsedRec {
@@ -18,6 +22,10 @@ interface ParsedRec {
   estimatedRobuxUplift: number;
   priority: string;
   category: string;
+  itemId?: string;
+  itemName?: string;
+  currentPrice?: number;
+  suggestedPrice?: number;
 }
 
 function parseContent(content: string): ParsedRec | null {
@@ -53,7 +61,66 @@ function getCategoryLabel(category: string): string {
   return labels[category] ?? category;
 }
 
-export function RecommendationsPanel({ recommendations }: RecommendationsPanelProps) {
+export function RecommendationsPanel({ recommendations, creatorId, gameId }: RecommendationsPanelProps) {
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+  const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
+
+  async function handleApply(rec: Recommendation, parsed: ParsedRec) {
+    setApplyingId(rec.id);
+
+    try {
+      // If it's a price recommendation, apply the price change
+      if (parsed.category === 'underpriced' && parsed.itemId && parsed.suggestedPrice) {
+        const res = await fetch('/api/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: 'apply-price',
+            creatorId,
+            gameId,
+            itemId: parsed.itemId,
+            itemName: parsed.itemName ?? parsed.title,
+            currentPrice: parsed.currentPrice ?? 0,
+            newPrice: parsed.suggestedPrice,
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          alert(`Failed to apply: ${data.error}`);
+          return;
+        }
+      } else {
+        // Generic recommendation apply
+        const res = await fetch('/api/actions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            endpoint: 'apply-recommendation',
+            creatorId,
+            gameId,
+            recommendationId: rec.id,
+            actionType: parsed.category,
+            actionData: {
+              title: parsed.title,
+              estimatedRobuxUplift: parsed.estimatedRobuxUplift,
+            },
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          alert(`Failed to apply: ${data.error}`);
+          return;
+        }
+      }
+
+      setAppliedIds((prev) => new Set(prev).add(rec.id));
+    } catch (err) {
+      alert(`Error: ${String(err)}`);
+    } finally {
+      setApplyingId(null);
+    }
+  }
+
   if (recommendations.length === 0) {
     return (
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
@@ -72,6 +139,7 @@ export function RecommendationsPanel({ recommendations }: RecommendationsPanelPr
         {recommendations.map((rec) => {
           const parsed = parseContent(rec.content);
           if (!parsed) return null;
+          const isApplied = appliedIds.has(rec.id) || rec.status === 'published';
 
           return (
             <div
@@ -97,6 +165,21 @@ export function RecommendationsPanel({ recommendations }: RecommendationsPanelPr
                   </p>
                   <p className="text-xs text-gray-500">est. uplift</p>
                 </div>
+              </div>
+              <div className="mt-3">
+                {isApplied ? (
+                  <span className="inline-flex items-center rounded-md bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-400">
+                    Applied
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleApply(rec, parsed)}
+                    disabled={applyingId === rec.id}
+                    className="rounded-md bg-brand-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                  >
+                    {applyingId === rec.id ? 'Applying...' : 'Apply This Change'}
+                  </button>
+                )}
               </div>
             </div>
           );

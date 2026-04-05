@@ -306,7 +306,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
       {activeTab === 'pricing' && (
         <div className="mt-8 space-y-6">
-          <PricingTestsTable tests={allPriceTests} />
+          <PricingTestsTable tests={allPriceTests} creatorId={creator?.id} gameId={games[0]?.id} />
         </div>
       )}
 
@@ -342,13 +342,15 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
           <GrowthBriefPreview
             brief={lastBrief?.data as any}
             sentAt={lastBrief?.sentAt ?? null}
+            creatorId={creator?.id}
+            gameId={games[0]?.id}
           />
         </div>
       )}
 
       {activeTab === 'recommendations' && (
         <div className="mt-8 space-y-6">
-          <RecommendationsPanel recommendations={recommendations} />
+          <RecommendationsPanel recommendations={recommendations} creatorId={creator?.id ?? ''} gameId={games[0]?.id} />
         </div>
       )}
     </main>

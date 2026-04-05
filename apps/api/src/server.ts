@@ -19,6 +19,7 @@ import { monetizationRouter } from './routes/monetization';
 import { supportRouter } from './routes/support';
 import { contentRouter } from './routes/content';
 import { growthBriefRouter } from './routes/growth-brief';
+import { actionsRouter } from './routes/actions';
 import { startScheduler } from './cron/scheduler';
 
 const app = express();
@@ -46,6 +47,7 @@ app.use('/api/monetization', monetizationRouter);
 app.use('/api/support', supportRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/growth-brief', growthBriefRouter);
+app.use('/api/actions', actionsRouter);
 
 async function startup() {
   // Verify DB connection before accepting traffic

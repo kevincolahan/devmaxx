@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+
 interface BriefData {
   revenue: {
     thisWeek: number;
@@ -37,13 +39,47 @@ interface BriefData {
 interface GrowthBriefPreviewProps {
   brief: BriefData | null;
   sentAt: string | null;
+  creatorId?: string;
+  gameId?: string;
 }
 
 function formatAgent(name: string): string {
   return name.replace(/Agent$/, '').replace(/([A-Z])/g, ' $1').trim();
 }
 
-export function GrowthBriefPreview({ brief, sentAt }: GrowthBriefPreviewProps) {
+export function GrowthBriefPreview({ brief, sentAt, creatorId, gameId }: GrowthBriefPreviewProps) {
+  const [applyingIdx, setApplyingIdx] = useState<number | null>(null);
+  const [appliedIdxs, setAppliedIdxs] = useState<Set<number>>(new Set());
+
+  async function handleApplyAction(idx: number, action: BriefData['nextActions'][0]) {
+    if (!creatorId) return;
+    setApplyingIdx(idx);
+    try {
+      const res = await fetch('/api/actions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          endpoint: 'apply-brief-action',
+          creatorId,
+          gameId,
+          actionText: action.action,
+          estimatedImpact: action.estimatedImpact,
+          effortLevel: action.effortLevel,
+        }),
+      });
+      if (res.ok) {
+        setAppliedIdxs((prev) => new Set(prev).add(idx));
+      } else {
+        const data = await res.json();
+        alert(`Failed: ${data.error}`);
+      }
+    } catch (err) {
+      alert(`Error: ${String(err)}`);
+    } finally {
+      setApplyingIdx(null);
+    }
+  }
+
   if (!brief) {
     return (
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
@@ -112,9 +148,21 @@ export function GrowthBriefPreview({ brief, sentAt }: GrowthBriefPreviewProps) {
           {brief.nextActions.map((item, i) => (
             <div key={i}>
               <p className="font-medium text-white">{i + 1}. {item.action}</p>
-              <div className="mt-1 flex gap-2">
+              <div className="mt-1 flex items-center gap-2">
                 <span className="rounded bg-emerald-900/50 px-2 py-0.5 text-xs text-emerald-300">Impact: {item.estimatedImpact}</span>
                 <span className="rounded bg-indigo-900/50 px-2 py-0.5 text-xs text-indigo-300">Effort: {item.effortLevel}</span>
+                {creatorId && !appliedIdxs.has(i) && (
+                  <button
+                    onClick={() => handleApplyAction(i, item)}
+                    disabled={applyingIdx === i}
+                    className="rounded-md bg-brand-600 px-3 py-0.5 text-xs font-semibold text-white hover:bg-brand-500 disabled:opacity-50"
+                  >
+                    {applyingIdx === i ? 'Applying...' : 'Apply'}
+                  </button>
+                )}
+                {appliedIdxs.has(i) && (
+                  <span className="text-xs text-green-400">Applied</span>
+                )}
               </div>
             </div>
           ))}
