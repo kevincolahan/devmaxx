@@ -14,6 +14,7 @@ import { postToTikTok } from '../lib/tiktok';
 import { createInstagramPost } from '../lib/instagram';
 import { runMentionsResponsePipeline } from '../agents/mentions-response';
 import { runCommunityOutreachPipeline } from '../agents/community-outreach';
+import { runOutcomeTrackingPipeline } from '../agents/outcome-tracking';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -450,6 +451,21 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // OutcomeTracking — daily 7am UTC (check follow-ups)
+  cron.schedule('0 7 * * *', guardedJob('OutcomeTracking', async () => {
+    log('OutcomeTracking', 'Starting outcome follow-up checks');
+    try {
+      const result = await withTimeout(
+        runOutcomeTrackingPipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'OutcomeTracking'
+      );
+      log('OutcomeTracking', `Done — checked: ${result.runsChecked}, updated: ${result.runsUpdated}, measured: ${result.totalMeasuredImpact} R$`);
+    } catch (err) {
+      log('OutcomeTracking', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
@@ -464,4 +480,5 @@ export function startScheduler() {
   console.log('  SocialPoster:IG      — 0 12 * * *   (12pm UTC daily)');
   console.log('  MentionsResponse     — 0 */2 * * *  (every 2 hours)');
   console.log('  CommunityOutreach    — 0 14 * * 3  (2pm UTC Wednesday)');
+  console.log('  OutcomeTracking      — 0 7 * * *   (7am UTC daily)');
 }

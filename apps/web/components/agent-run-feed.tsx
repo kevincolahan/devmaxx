@@ -5,6 +5,8 @@ interface AgentRun {
   agentName: string;
   action: string;
   robuxImpact: number | null;
+  actualRobuxImpact: number | null;
+  followUpCompleted: boolean;
   status: string;
   createdAt: string;
 }
@@ -50,6 +52,11 @@ function timeAgo(dateStr: string): string {
 }
 
 export function AgentRunFeed({ runs }: AgentRunFeedProps) {
+  // Calculate overall measured impact
+  const measuredRuns = runs.filter((r) => r.followUpCompleted && r.actualRobuxImpact !== null);
+  const totalMeasured = measuredRuns.reduce((sum, r) => sum + (r.actualRobuxImpact ?? 0), 0);
+  const totalEstimated = measuredRuns.reduce((sum, r) => sum + (r.robuxImpact ?? 0), 0);
+
   if (runs.length === 0) {
     return (
       <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
@@ -63,7 +70,18 @@ export function AgentRunFeed({ runs }: AgentRunFeedProps) {
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-      <h3 className="mb-4 font-semibold text-white">Recent Agent Runs</h3>
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="font-semibold text-white">Recent Agent Runs</h3>
+        {measuredRuns.length > 0 && (
+          <div className="text-right">
+            <span className="text-xs text-gray-500">Measured Impact</span>
+            <span className={`ml-2 text-sm font-bold ${totalMeasured >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {totalMeasured >= 0 ? '+' : ''}{totalMeasured.toLocaleString()} R$
+            </span>
+          </div>
+        )}
+      </div>
+
       <div className="space-y-3">
         {runs.map((run) => (
           <div
@@ -84,6 +102,7 @@ export function AgentRunFeed({ runs }: AgentRunFeedProps) {
               </div>
             </div>
             <div className="text-right">
+              {/* Estimated impact */}
               <p
                 className={`text-sm font-medium ${
                   (run.robuxImpact ?? 0) > 0
@@ -94,7 +113,20 @@ export function AgentRunFeed({ runs }: AgentRunFeedProps) {
                 }`}
               >
                 {formatRobux(run.robuxImpact)}
+                {(run.robuxImpact ?? 0) > 0 && !run.followUpCompleted && (
+                  <span className="ml-1 text-xs text-gray-500">est.</span>
+                )}
               </p>
+
+              {/* Measured impact — show if follow-up completed */}
+              {run.followUpCompleted && run.actualRobuxImpact !== null && (
+                <p className={`text-xs font-medium ${
+                  run.actualRobuxImpact > 0 ? 'text-blue-400' : run.actualRobuxImpact < 0 ? 'text-red-400' : 'text-gray-500'
+                }`}>
+                  {formatRobux(run.actualRobuxImpact)} measured
+                </p>
+              )}
+
               <p className="text-xs text-gray-500">{timeAgo(run.createdAt)}</p>
             </div>
           </div>

@@ -74,6 +74,8 @@ interface AgentRun {
   agentName: string;
   action: string;
   robuxImpact: number | null;
+  actualRobuxImpact: number | null;
+  followUpCompleted: boolean;
   status: string;
   createdAt: string;
 }

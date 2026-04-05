@@ -148,6 +148,8 @@ export default async function DashboardPage() {
       agentName: run.agentName,
       action: run.action,
       robuxImpact: run.robuxImpact,
+      actualRobuxImpact: run.actualRobuxImpact,
+      followUpCompleted: run.followUpCompleted,
       status: run.status,
       createdAt: run.createdAt.toISOString(),
     })),

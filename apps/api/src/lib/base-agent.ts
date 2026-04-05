@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaClient } from '@prisma/client';
+import { scheduleOutcomeFollowUp } from '../agents/outcome-tracking';
 
 export interface AgentContext {
   creatorId: string;
@@ -51,7 +52,7 @@ export abstract class BaseAgent {
   }
 
   private async logRun(context: AgentContext, result: AgentResult) {
-    await context.db.agentRun.create({
+    const run = await context.db.agentRun.create({
       data: {
         creatorId: context.creatorId,
         agentName: this.agentName,
@@ -63,6 +64,15 @@ export abstract class BaseAgent {
         status: result.status,
       },
     });
+
+    // Auto-schedule outcome follow-up for runs with positive robuxImpact and a game
+    if ((result.robuxImpact ?? 0) > 0 && context.gameId && result.status === 'success') {
+      try {
+        await scheduleOutcomeFollowUp(context.db, run.id, context.gameId);
+      } catch (err) {
+        console.error(`[BaseAgent] Failed to schedule outcome follow-up for ${run.id}:`, err);
+      }
+    }
   }
 
   abstract buildSystemPrompt(ctx: AgentContext): string;

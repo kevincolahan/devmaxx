@@ -154,17 +154,21 @@ model ContentPiece {
 }
 
 model AgentRun {
-  id          String   @id @default(cuid())
-  creatorId   String
-  agentName   String
-  gameId      String?
-  input       Json
-  output      Json
-  action      String
-  robuxImpact Int?
-  status      String   @default("success")
-  createdAt   DateTime @default(now())
-  creator     Creator  @relation(fields: [creatorId], references: [id])
+  id                 String    @id @default(cuid())
+  creatorId          String
+  agentName          String
+  gameId             String?
+  input              Json
+  output             Json
+  action             String
+  robuxImpact        Int?
+  actualRobuxImpact  Int?
+  baselineMetrics    Json?
+  followUpAt         DateTime?
+  followUpCompleted  Boolean   @default(false)
+  status             String    @default("success")
+  createdAt          DateTime  @default(now())
+  creator            Creator   @relation(fields: [creatorId], references: [id])
 }
 
 model CompetitorSnapshot {

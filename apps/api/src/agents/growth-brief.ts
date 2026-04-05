@@ -51,8 +51,9 @@ You will receive this week's data vs last week. Generate a structured brief with
 1. **Revenue Summary**: Robux earned this week vs last week vs 4-week average. Highlight the trend.
 2. **Player Health**: DAU trend (up/down/flat), D7 retention cohort analysis.
 3. **Top 3 This Week**: The 3 most important things that happened (good or bad). Each needs a title and one-sentence description.
-4. **Next 3 Actions**: 3 specific actions the creator should take, with estimated impact (high/medium/low) and effort (low/medium/high).
-5. **Agent Activity**: Summary of what the AI agents did this week.
+4. **Last Week's Recommendations — What Actually Happened**: For any recommendations with measured outcomes, show prediction vs reality. Build trust through transparency. If no measured outcomes exist, omit this section.
+5. **Next 3 Actions**: 3 specific actions the creator should take, with estimated impact (high/medium/low) and effort (low/medium/high).
+6. **Agent Activity**: Summary of what the AI agents did this week including measured impact.
 
 Respond ONLY with valid JSON:
 {
@@ -100,7 +101,12 @@ Respond ONLY with valid JSON:
     prompt += `PRICE TEST RESULTS:\n${JSON.stringify(input.priceTests, null, 2)}\n\n`;
     prompt += `SUPPORT TICKETS:\n${JSON.stringify(input.supportStats, null, 2)}\n\n`;
     prompt += `COMPETITOR CHANGES:\n${JSON.stringify(input.competitorChanges, null, 2)}\n\n`;
-    prompt += `CONTENT PUBLISHED:\n${JSON.stringify(input.contentStats, null, 2)}\n`;
+    prompt += `CONTENT PUBLISHED:\n${JSON.stringify(input.contentStats, null, 2)}\n\n`;
+
+    if (input.outcomeResults && (input.outcomeResults as unknown[]).length > 0) {
+      prompt += `LAST WEEK'S RECOMMENDATIONS — MEASURED OUTCOMES:\n${JSON.stringify(input.outcomeResults, null, 2)}\n\n`;
+      prompt += `Include a "What Actually Happened" section comparing predictions vs reality for these.\n`;
+    }
 
     return prompt;
   }
@@ -226,6 +232,21 @@ Respond ONLY with valid JSON:
           rating: c.rating,
         })),
         contentStats: { published: contentCount },
+        outcomeResults: await db.agentRun.findMany({
+          where: {
+            creatorId,
+            gameId,
+            followUpCompleted: true,
+            actualRobuxImpact: { not: null },
+            createdAt: { gte: twoWeeksAgo },
+          },
+          select: {
+            agentName: true,
+            action: true,
+            robuxImpact: true,
+            actualRobuxImpact: true,
+          },
+        }),
       },
       db,
     };
