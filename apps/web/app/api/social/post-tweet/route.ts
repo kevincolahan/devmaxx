@@ -147,7 +147,7 @@ export async function POST(req: NextRequest) {
     // Update content piece status if contentPieceId provided
     if (contentPieceId) {
       try {
-        const API_BASE = process.env.API_BASE_URL || 'http://localhost:3001';
+        const API_BASE = process.env.API_BASE_URL || 'https://devmaxx-production.up.railway.app';
         await fetch(`${API_BASE}/api/content/status`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

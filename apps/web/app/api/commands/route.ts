@@ -2,8 +2,9 @@ export const dynamic = 'force-dynamic';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
+import { db } from '@/lib/db';
 
-const API_BASE = process.env.API_BASE_URL || 'http://localhost:3001';
+const API_BASE = process.env.API_BASE_URL || 'https://devmaxx-production.up.railway.app';
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -18,6 +19,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid endpoint' }, { status: 400 });
   }
 
+  // If no creatorId provided, look it up from session
+  if (!data.creatorId) {
+    const creator = await db.creator.findUnique({ where: { email: session.user.email } });
+    if (creator) {
+      data.creatorId = creator.id;
+    }
+  }
+
+  console.log(`[commands proxy] ${endpoint} → ${API_BASE}/api/commands/${endpoint}`);
+
   try {
     const response = await fetch(`${API_BASE}/api/commands/${endpoint}`, {
       method: 'POST',
@@ -31,6 +42,7 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json(result);
   } catch (err) {
-    return NextResponse.json({ error: `API unreachable: ${String(err)}` }, { status: 502 });
+    console.error(`[commands proxy] Failed:`, err);
+    return NextResponse.json({ error: `Failed to reach API: ${String(err)}` }, { status: 502 });
   }
 }
