@@ -14,6 +14,7 @@ import { ContentQueue } from '@/components/content-queue';
 import { GrowthBriefPreview } from '@/components/growth-brief-preview';
 import { InsightsChat } from '@/components/insights-chat';
 import { MentionsFeed } from '@/components/mentions-feed';
+import { CommunityOutreach } from '@/components/community-outreach';
 
 interface Snapshot {
   date: string;
@@ -125,6 +126,8 @@ interface DashboardData {
   recommendations: Recommendation[];
   contentPieces: ContentItem[];
   mentions: MentionItem[];
+  communityLastPost: Record<string, unknown> | null;
+  communityPostHistory: string[];
   lastBrief: {
     data: Record<string, unknown>;
     sentAt: string;
@@ -141,10 +144,10 @@ interface DashboardClientProps {
   userEmail: string;
 }
 
-type Tab = 'overview' | 'pricing' | 'support' | 'content' | 'mentions' | 'brief' | 'recommendations' | 'ask';
+type Tab = 'overview' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'ask';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
-  const { creator, games, recentRuns, recommendations, contentPieces, mentions, lastBrief, stats } = data;
+  const { creator, games, recentRuns, recommendations, contentPieces, mentions, communityLastPost, communityPostHistory, lastBrief, stats } = data;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const searchParams = useSearchParams();
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false);
@@ -169,6 +172,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
     { key: 'support', label: 'Support', count: escalatedCount },
     { key: 'content', label: 'Content', count: draftContentCount },
     { key: 'mentions', label: 'Mentions', count: mentions.filter((m) => m.category === 'negative').length },
+    { key: 'community', label: 'Community' },
     { key: 'brief', label: 'Growth Brief' },
     { key: 'recommendations', label: 'Recs', count: recommendations.length },
   ];
@@ -319,6 +323,15 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
       {activeTab === 'mentions' && (
         <div className="mt-8 space-y-6">
           <MentionsFeed mentions={mentions} />
+        </div>
+      )}
+
+      {activeTab === 'community' && (
+        <div className="mt-8 space-y-6">
+          <CommunityOutreach
+            lastPost={communityLastPost as any}
+            postHistory={communityPostHistory}
+          />
         </div>
       )}
 

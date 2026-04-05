@@ -13,6 +13,7 @@ import { postToLinkedIn } from '../lib/linkedin';
 import { postToTikTok } from '../lib/tiktok';
 import { createInstagramPost } from '../lib/instagram';
 import { runMentionsResponsePipeline } from '../agents/mentions-response';
+import { runCommunityOutreachPipeline } from '../agents/community-outreach';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -434,6 +435,21 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // CommunityOutreach — Wednesday 2pm UTC weekly
+  cron.schedule('0 14 * * 3', guardedJob('CommunityOutreach', async () => {
+    log('CommunityOutreach', 'Starting weekly community outreach');
+    try {
+      const result = await withTimeout(
+        runCommunityOutreachPipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'CommunityOutreach'
+      );
+      log('CommunityOutreach', `Done — quality: ${result.qualityScore}, reddit: ${result.redditPosted}, devforum: ${result.devforumPosted}${result.skippedReason ? `, skipped: ${result.skippedReason}` : ''}`);
+    } catch (err) {
+      log('CommunityOutreach', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
@@ -447,4 +463,5 @@ export function startScheduler() {
   console.log('  SocialPoster:LI      — 0 11 * * *   (11am UTC daily)');
   console.log('  SocialPoster:IG      — 0 12 * * *   (12pm UTC daily)');
   console.log('  MentionsResponse     — 0 */2 * * *  (every 2 hours)');
+  console.log('  CommunityOutreach    — 0 14 * * 3  (2pm UTC Wednesday)');
 }

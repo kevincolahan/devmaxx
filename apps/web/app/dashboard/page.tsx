@@ -76,6 +76,9 @@ export default async function DashboardPage() {
       })
     : null;
 
+  const communityLastPostRow = await db.keyValue.findUnique({ where: { key: 'community_last_post' } });
+  const communityHistoryRow = await db.keyValue.findUnique({ where: { key: 'community_post_history' } });
+
   const mentionLogs = await db.mentionLog.findMany({
     orderBy: { processedAt: 'desc' },
     take: 50,
@@ -171,6 +174,8 @@ export default async function DashboardPage() {
           sentAt: lastBriefRun.createdAt.toISOString(),
         }
       : null,
+    communityLastPost: communityLastPostRow ? JSON.parse(communityLastPostRow.value) : null,
+    communityPostHistory: communityHistoryRow ? JSON.parse(communityHistoryRow.value) : [],
     mentions: mentionLogs.map((m) => ({
       id: m.id,
       mentionId: m.mentionId,
