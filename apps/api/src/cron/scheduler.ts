@@ -17,6 +17,7 @@ import { runCommunityOutreachPipeline } from '../agents/community-outreach';
 import { runOutcomeTrackingPipeline } from '../agents/outcome-tracking';
 import { checkSaleRestorations } from '../agents/command-executor';
 import { runOnboardingEmails } from '../lib/onboarding-emails';
+import { runRevenueForecastPipeline } from '../agents/revenue-forecast';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -453,6 +454,27 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // RevenueForecast — Monday 10am UTC (after MetricsMonitor)
+  cron.schedule('0 10 * * 1', guardedJob('RevenueForecast', async () => {
+    log('RevenueForecast', 'Starting weekly revenue forecasts');
+    const creators = await getCreatorsWithGames(PAID_PLANS);
+    for (const creator of creators) {
+      for (const game of creator.games) {
+        try {
+          const result = await withTimeout(
+            runRevenueForecastPipeline(creator.id, game.id, db),
+            AGENT_RUN_TIMEOUT_MS,
+            `RevenueForecast:${game.name}`
+          );
+          log('RevenueForecast', `${game.name}: base=${result.forecast.next30DaysRobux} R$`);
+        } catch (err) {
+          log('RevenueForecast', `FAILED ${game.name}: ${err}`);
+        }
+      }
+    }
+    log('RevenueForecast', 'Complete');
+  }), { timezone: 'UTC' });
+
   // OnboardingEmails — daily 9am UTC
   cron.schedule('0 9 * * *', guardedJob('OnboardingEmails', async () => {
     log('OnboardingEmails', 'Checking for day 3 + day 7 emails');
@@ -503,6 +525,7 @@ export function startScheduler() {
   console.log('  SocialPoster:IG      — 0 12 * * *   (12pm UTC daily)');
   console.log('  MentionsResponse     — 0 */2 * * *  (every 2 hours)');
   console.log('  CommunityOutreach    — 0 14 * * 3  (2pm UTC Wednesday)');
+  console.log('  RevenueForecast      — 0 10 * * 1  (10am UTC Monday)');
   console.log('  OnboardingEmails     — 0 9 * * *   (9am UTC daily)');
   console.log('  SaleRestore          — 0 * * * *   (every hour)');
   console.log('  OutcomeTracking      — 0 7 * * *   (7am UTC daily)');

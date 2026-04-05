@@ -16,6 +16,7 @@ import { InsightsChat } from '@/components/insights-chat';
 import { MentionsFeed } from '@/components/mentions-feed';
 import { CommunityOutreach } from '@/components/community-outreach';
 import { CommandConsole } from '@/components/command-console';
+import { RevenueForecastCard } from '@/components/revenue-forecast-card';
 
 interface Snapshot {
   date: string;
@@ -129,6 +130,16 @@ interface DashboardData {
   recommendations: Recommendation[];
   contentPieces: ContentItem[];
   mentions: MentionItem[];
+  forecast: {
+    next30DaysRobux: number;
+    next90DaysRobux: number;
+    projectedDevExUSD: number;
+    upsideRobux: number;
+    downsideRobux: number;
+    assumptions: Record<string, unknown>;
+    seasonalFactors: Record<string, unknown>;
+    forecastDate: string;
+  } | null;
   communityLastPost: Record<string, unknown> | null;
   communityPostHistory: string[];
   lastBrief: {
@@ -150,7 +161,7 @@ interface DashboardClientProps {
 type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'ask';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
-  const { creator, games, recentRuns, recommendations, contentPieces, mentions, communityLastPost, communityPostHistory, lastBrief, stats } = data;
+  const { creator, games, recentRuns, recommendations, contentPieces, mentions, forecast, communityLastPost, communityPostHistory, lastBrief, stats } = data;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const searchParams = useSearchParams();
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false);
@@ -283,6 +294,11 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
               </div>
             </div>
           )}
+          {/* Revenue Forecast */}
+          <div className="mt-8">
+            <RevenueForecastCard forecast={forecast as any} />
+          </div>
+
           {games.length > 0 && (
             <div className="mt-8 space-y-6">
               {games.map((game) => (

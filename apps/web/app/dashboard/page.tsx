@@ -76,6 +76,13 @@ export default async function DashboardPage() {
       })
     : null;
 
+  const latestForecast = creator?.games[0]
+    ? await db.revenueForecast.findFirst({
+        where: { gameId: creator.games[0].id },
+        orderBy: { forecastDate: 'desc' },
+      })
+    : null;
+
   const communityLastPostRow = await db.keyValue.findUnique({ where: { key: 'community_last_post' } });
   const communityHistoryRow = await db.keyValue.findUnique({ where: { key: 'community_post_history' } });
 
@@ -176,6 +183,16 @@ export default async function DashboardPage() {
           sentAt: lastBriefRun.createdAt.toISOString(),
         }
       : null,
+    forecast: latestForecast ? {
+      next30DaysRobux: latestForecast.next30DaysRobux,
+      next90DaysRobux: latestForecast.next90DaysRobux,
+      projectedDevExUSD: latestForecast.projectedDevExUSD,
+      upsideRobux: latestForecast.upsideRobux,
+      downsideRobux: latestForecast.downsideRobux,
+      assumptions: latestForecast.assumptions as Record<string, unknown>,
+      seasonalFactors: latestForecast.seasonalFactors as Record<string, unknown>,
+      forecastDate: latestForecast.forecastDate.toISOString(),
+    } : null,
     communityLastPost: communityLastPostRow ? JSON.parse(communityLastPostRow.value) : null,
     communityPostHistory: communityHistoryRow ? JSON.parse(communityHistoryRow.value) : [],
     mentions: mentionLogs.map((m) => ({

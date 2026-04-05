@@ -191,6 +191,20 @@ model BugTicket {
   createdAt   DateTime @default(now())
 }
 
+model RevenueForecast {
+  id                String   @id @default(cuid())
+  creatorId         String
+  gameId            String
+  forecastDate      DateTime @default(now())
+  next30DaysRobux   Int
+  next90DaysRobux   Int
+  projectedDevExUSD Float
+  upsideRobux       Int
+  downsideRobux     Int
+  assumptions       Json
+  seasonalFactors   Json
+}
+
 model MentionLog {
   id              String   @id @default(cuid())
   mentionId       String   @unique
