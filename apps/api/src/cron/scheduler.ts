@@ -19,6 +19,7 @@ import { checkSaleRestorations } from '../agents/command-executor';
 import { runOnboardingEmails } from '../lib/onboarding-emails';
 import { runRevenueForecastPipeline } from '../agents/revenue-forecast';
 import { runEventImpactPipeline } from '../agents/event-impact';
+import { runPlayerSentimentPipeline } from '../agents/player-sentiment';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -455,6 +456,27 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // PlayerSentiment — Tuesday 8am UTC (weekly feedback analysis)
+  cron.schedule('0 8 * * 2', guardedJob('PlayerSentiment', async () => {
+    log('PlayerSentiment', 'Starting weekly sentiment analysis');
+    const creators = await getCreatorsWithGames(PAID_PLANS);
+    for (const creator of creators) {
+      for (const game of creator.games) {
+        try {
+          const result = await withTimeout(
+            runPlayerSentimentPipeline(creator.id, game.id, db),
+            AGENT_RUN_TIMEOUT_MS,
+            `PlayerSentiment:${game.name}`
+          );
+          log('PlayerSentiment', `${game.name}: score=${result.overallScore}/10 (${result.weekOverWeekChange})`);
+        } catch (err) {
+          log('PlayerSentiment', `FAILED ${game.name}: ${err}`);
+        }
+      }
+    }
+    log('PlayerSentiment', 'Complete');
+  }), { timezone: 'UTC' });
+
   // EventImpact — daily 7am UTC (detect updates, measure pending events)
   cron.schedule('30 7 * * *', guardedJob('EventImpact', async () => {
     log('EventImpact', 'Starting daily event impact analysis');
@@ -541,6 +563,7 @@ export function startScheduler() {
   console.log('  SocialPoster:IG      — 0 12 * * *   (12pm UTC daily)');
   console.log('  MentionsResponse     — 0 */2 * * *  (every 2 hours)');
   console.log('  CommunityOutreach    — 0 14 * * 3  (2pm UTC Wednesday)');
+  console.log('  PlayerSentiment      — 0 8 * * 2   (8am UTC Tuesday)');
   console.log('  EventImpact          — 30 7 * * *  (7:30am UTC daily)');
   console.log('  RevenueForecast      — 0 10 * * 1  (10am UTC Monday)');
   console.log('  OnboardingEmails     — 0 9 * * *   (9am UTC daily)');

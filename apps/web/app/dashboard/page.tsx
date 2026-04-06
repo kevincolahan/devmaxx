@@ -76,6 +76,13 @@ export default async function DashboardPage() {
       })
     : null;
 
+  const latestSentiment = creator?.games[0]
+    ? await db.playerSentiment.findFirst({
+        where: { gameId: creator.games[0].id },
+        orderBy: { analyzedAt: 'desc' },
+      })
+    : null;
+
   const recentEvents = creator?.games[0]
     ? await db.eventImpact.findMany({
         where: { gameId: creator.games[0].id },
@@ -191,6 +198,17 @@ export default async function DashboardPage() {
           sentAt: lastBriefRun.createdAt.toISOString(),
         }
       : null,
+    sentiment: latestSentiment ? {
+      overallScore: latestSentiment.overallScore,
+      weekOverWeekChange: latestSentiment.weekOverWeekChange,
+      claudeSummary: latestSentiment.claudeSummary,
+      topBugs: latestSentiment.topBugs as unknown[],
+      topRequests: latestSentiment.topRequests as unknown[],
+      topPraise: latestSentiment.topPraise as unknown[],
+      topFrustrations: latestSentiment.topFrustrations as unknown[],
+      ticketsAnalyzed: latestSentiment.ticketsAnalyzed,
+      analyzedAt: latestSentiment.analyzedAt.toISOString(),
+    } : null,
     events: recentEvents.map((e) => ({
       id: e.id,
       eventType: e.eventType,

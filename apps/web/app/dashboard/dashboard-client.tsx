@@ -18,6 +18,7 @@ import { CommunityOutreach } from '@/components/community-outreach';
 import { CommandConsole } from '@/components/command-console';
 import { RevenueForecastCard } from '@/components/revenue-forecast-card';
 import { EventImpactTimeline } from '@/components/event-impact-timeline';
+import { SentimentAnalysis } from '@/components/sentiment-analysis';
 
 interface Snapshot {
   date: string;
@@ -131,6 +132,17 @@ interface DashboardData {
   recommendations: Recommendation[];
   contentPieces: ContentItem[];
   mentions: MentionItem[];
+  sentiment: {
+    overallScore: number;
+    weekOverWeekChange: string;
+    claudeSummary: string | null;
+    topBugs: unknown[];
+    topRequests: unknown[];
+    topPraise: unknown[];
+    topFrustrations: unknown[];
+    ticketsAnalyzed: number;
+    analyzedAt: string;
+  } | null;
   events: Array<{
     id: string;
     eventType: string;
@@ -177,7 +189,7 @@ interface DashboardClientProps {
 type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'ask';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
-  const { creator, games, recentRuns, recommendations, contentPieces, mentions, events, forecast, communityLastPost, communityPostHistory, lastBrief, stats } = data;
+  const { creator, games, recentRuns, recommendations, contentPieces, mentions, sentiment, events, forecast, communityLastPost, communityPostHistory, lastBrief, stats } = data;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const searchParams = useSearchParams();
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false);
@@ -353,6 +365,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
       {activeTab === 'support' && (
         <div className="mt-8 space-y-6">
+          <SentimentAnalysis sentiment={sentiment as any} />
           <SupportTicketsList tickets={allTickets} />
         </div>
       )}

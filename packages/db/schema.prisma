@@ -191,6 +191,20 @@ model BugTicket {
   createdAt   DateTime @default(now())
 }
 
+model PlayerSentiment {
+  id                   String   @id @default(cuid())
+  gameId               String
+  analyzedAt           DateTime @default(now())
+  topBugs              Json
+  topRequests          Json
+  topPraise            Json
+  topFrustrations      Json
+  overallScore         Int
+  weekOverWeekChange   String   @default("neutral")
+  claudeSummary        String?
+  ticketsAnalyzed      Int      @default(0)
+}
+
 model EventImpact {
   id               String   @id @default(cuid())
   gameId           String

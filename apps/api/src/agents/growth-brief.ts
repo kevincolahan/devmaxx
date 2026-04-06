@@ -103,6 +103,11 @@ Respond ONLY with valid JSON:
     prompt += `COMPETITOR CHANGES:\n${JSON.stringify(input.competitorChanges, null, 2)}\n\n`;
     prompt += `CONTENT PUBLISHED:\n${JSON.stringify(input.contentStats, null, 2)}\n\n`;
 
+    if (input.playerSentiment) {
+      prompt += `PLAYER PULSE:\n${JSON.stringify(input.playerSentiment, null, 2)}\n\n`;
+      prompt += `Include a "Player Pulse" section: sentiment score, #1 complaint, #1 praise, one action to improve.\n\n`;
+    }
+
     if (input.outcomeResults && (input.outcomeResults as unknown[]).length > 0) {
       prompt += `LAST WEEK'S RECOMMENDATIONS — MEASURED OUTCOMES:\n${JSON.stringify(input.outcomeResults, null, 2)}\n\n`;
       prompt += `Include a "What Actually Happened" section comparing predictions vs reality for these.\n`;
@@ -232,6 +237,16 @@ Respond ONLY with valid JSON:
           rating: c.rating,
         })),
         contentStats: { published: contentCount },
+        playerSentiment: await db.playerSentiment.findFirst({
+          where: { gameId },
+          orderBy: { analyzedAt: 'desc' },
+          select: {
+            overallScore: true,
+            weekOverWeekChange: true,
+            topBugs: true,
+            topPraise: true,
+          },
+        }),
         outcomeResults: await db.agentRun.findMany({
           where: {
             creatorId,
