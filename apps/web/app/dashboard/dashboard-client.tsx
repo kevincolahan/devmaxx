@@ -17,6 +17,7 @@ import { MentionsFeed } from '@/components/mentions-feed';
 import { CommunityOutreach } from '@/components/community-outreach';
 import { CommandConsole } from '@/components/command-console';
 import { RevenueForecastCard } from '@/components/revenue-forecast-card';
+import { EventImpactTimeline } from '@/components/event-impact-timeline';
 
 interface Snapshot {
   date: string;
@@ -130,6 +131,21 @@ interface DashboardData {
   recommendations: Recommendation[];
   contentPieces: ContentItem[];
   mentions: MentionItem[];
+  events: Array<{
+    id: string;
+    eventType: string;
+    eventName: string;
+    startedAt: string;
+    measuredAt: string | null;
+    dauBefore: number;
+    dauAfter: number;
+    dauChangePercent: number;
+    revenueBefore: number;
+    revenueAfter: number;
+    verdict: string;
+    claudeSummary: string | null;
+    measured: boolean;
+  }>;
   forecast: {
     next30DaysRobux: number;
     next90DaysRobux: number;
@@ -161,7 +177,7 @@ interface DashboardClientProps {
 type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'ask';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
-  const { creator, games, recentRuns, recommendations, contentPieces, mentions, forecast, communityLastPost, communityPostHistory, lastBrief, stats } = data;
+  const { creator, games, recentRuns, recommendations, contentPieces, mentions, events, forecast, communityLastPost, communityPostHistory, lastBrief, stats } = data;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const searchParams = useSearchParams();
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false);
@@ -294,9 +310,10 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
               </div>
             </div>
           )}
-          {/* Revenue Forecast */}
-          <div className="mt-8">
+          {/* Revenue Forecast + Event Impact */}
+          <div className="mt-8 grid gap-6 md:grid-cols-2">
             <RevenueForecastCard forecast={forecast as any} />
+            <EventImpactTimeline events={events} />
           </div>
 
           {games.length > 0 && (

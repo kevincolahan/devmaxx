@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaClient } from '@prisma/client';
+import { registerEvent } from './event-impact';
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -279,6 +280,12 @@ export async function executeCommand(
       const eventType = (params.eventType as string) || 'event';
       const scheduledDate = (params.scheduledDate as string) || '';
       const details = (params.details as string) || '';
+      const eventName = (params.eventName as string) || eventType;
+
+      // Register for impact tracking
+      if (gameId) {
+        await registerEvent(db, gameId, eventType, eventName);
+      }
 
       await db.keyValue.upsert({
         where: { key: `scheduled_${gameId}_${Date.now()}` },
@@ -292,7 +299,7 @@ export async function executeCommand(
           agentName: 'CommandExecutor',
           gameId,
           input: { command: 'schedule_event', ...params },
-          output: { scheduled: true, eventType, scheduledDate, details },
+          output: { scheduled: true, eventType, scheduledDate, details, impactTrackingStarted: true },
           action: 'event_scheduled',
           robuxImpact: 0,
           status: 'success',
@@ -301,7 +308,7 @@ export async function executeCommand(
 
       return {
         success: true,
-        message: `Scheduled "${eventType}" for ${scheduledDate || 'later'}.`,
+        message: `Scheduled "${eventName}" for ${scheduledDate || 'now'}. Impact tracking started — results in 7 days.`,
         details: { eventType, scheduledDate, details },
         agentRunId: run.id,
       };

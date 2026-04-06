@@ -18,6 +18,7 @@ import { runOutcomeTrackingPipeline } from '../agents/outcome-tracking';
 import { checkSaleRestorations } from '../agents/command-executor';
 import { runOnboardingEmails } from '../lib/onboarding-emails';
 import { runRevenueForecastPipeline } from '../agents/revenue-forecast';
+import { runEventImpactPipeline } from '../agents/event-impact';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -454,6 +455,21 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // EventImpact — daily 7am UTC (detect updates, measure pending events)
+  cron.schedule('30 7 * * *', guardedJob('EventImpact', async () => {
+    log('EventImpact', 'Starting daily event impact analysis');
+    try {
+      const result = await withTimeout(
+        runEventImpactPipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'EventImpact'
+      );
+      log('EventImpact', `Done — detected: ${result.eventsDetected}, measured: ${result.eventsMeasured}`);
+    } catch (err) {
+      log('EventImpact', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   // RevenueForecast — Monday 10am UTC (after MetricsMonitor)
   cron.schedule('0 10 * * 1', guardedJob('RevenueForecast', async () => {
     log('RevenueForecast', 'Starting weekly revenue forecasts');
@@ -525,6 +541,7 @@ export function startScheduler() {
   console.log('  SocialPoster:IG      — 0 12 * * *   (12pm UTC daily)');
   console.log('  MentionsResponse     — 0 */2 * * *  (every 2 hours)');
   console.log('  CommunityOutreach    — 0 14 * * 3  (2pm UTC Wednesday)');
+  console.log('  EventImpact          — 30 7 * * *  (7:30am UTC daily)');
   console.log('  RevenueForecast      — 0 10 * * 1  (10am UTC Monday)');
   console.log('  OnboardingEmails     — 0 9 * * *   (9am UTC daily)');
   console.log('  SaleRestore          — 0 * * * *   (every hour)');

@@ -76,6 +76,14 @@ export default async function DashboardPage() {
       })
     : null;
 
+  const recentEvents = creator?.games[0]
+    ? await db.eventImpact.findMany({
+        where: { gameId: creator.games[0].id },
+        orderBy: { startedAt: 'desc' },
+        take: 10,
+      })
+    : [];
+
   const latestForecast = creator?.games[0]
     ? await db.revenueForecast.findFirst({
         where: { gameId: creator.games[0].id },
@@ -183,6 +191,21 @@ export default async function DashboardPage() {
           sentAt: lastBriefRun.createdAt.toISOString(),
         }
       : null,
+    events: recentEvents.map((e) => ({
+      id: e.id,
+      eventType: e.eventType,
+      eventName: e.eventName,
+      startedAt: e.startedAt.toISOString(),
+      measuredAt: e.measuredAt?.toISOString() ?? null,
+      dauBefore: e.dauBefore,
+      dauAfter: e.dauAfter,
+      dauChangePercent: e.dauChangePercent,
+      revenueBefore: e.revenueBefore,
+      revenueAfter: e.revenueAfter,
+      verdict: e.verdict,
+      claudeSummary: e.claudeSummary,
+      measured: e.measured,
+    })),
     forecast: latestForecast ? {
       next30DaysRobux: latestForecast.next30DaysRobux,
       next90DaysRobux: latestForecast.next90DaysRobux,

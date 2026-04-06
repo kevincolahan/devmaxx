@@ -191,6 +191,27 @@ model BugTicket {
   createdAt   DateTime @default(now())
 }
 
+model EventImpact {
+  id               String   @id @default(cuid())
+  gameId           String
+  eventType        String
+  eventName        String
+  startedAt        DateTime
+  measuredAt       DateTime?
+  dauBefore        Int      @default(0)
+  dauAfter         Int      @default(0)
+  dauChangePercent Float    @default(0)
+  retentionBefore  Float    @default(0)
+  retentionAfter   Float    @default(0)
+  revenueBefore    Int      @default(0)
+  revenueAfter     Int      @default(0)
+  sessionBefore    Int      @default(0)
+  sessionAfter     Int      @default(0)
+  verdict          String   @default("pending")
+  claudeSummary    String?
+  measured         Boolean  @default(false)
+}
+
 model RevenueForecast {
   id                String   @id @default(cuid())
   creatorId         String
