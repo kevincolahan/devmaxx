@@ -278,6 +278,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
           <AutopilotToggle
             creatorId={creator.id}
             initialValue={creator.autopilot}
+            plan={creator.plan}
           />
         )}
       </div>
