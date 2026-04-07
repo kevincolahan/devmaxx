@@ -20,6 +20,7 @@ import { runOnboardingEmails } from '../lib/onboarding-emails';
 import { runRevenueForecastPipeline } from '../agents/revenue-forecast';
 import { runEventImpactPipeline } from '../agents/event-impact';
 import { runPlayerSentimentPipeline } from '../agents/player-sentiment';
+import { runXOutreachPipeline } from '../agents/x-outreach';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -563,6 +564,21 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // XOutreach — every 4 hours (proactive outreach to Roblox creators on X)
+  cron.schedule('0 */4 * * *', guardedJob('XOutreach', async () => {
+    log('XOutreach', 'Starting X outreach scan');
+    try {
+      const result = await withTimeout(
+        runXOutreachPipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'XOutreach'
+      );
+      log('XOutreach', `Done — searched: ${result.tweetsSearched}, eligible: ${result.tweetsEligible}, replied: ${result.repliesPosted}, skipped: ${result.skipped}${result.errors.length > 0 ? `, errors: ${result.errors.length}` : ''}`);
+    } catch (err) {
+      log('XOutreach', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
@@ -583,4 +599,5 @@ export function startScheduler() {
   console.log('  OnboardingEmails     — 0 9 * * *   (9am UTC daily)');
   console.log('  SaleRestore          — 0 * * * *   (every hour)');
   console.log('  OutcomeTracking      — 0 7 * * *   (7am UTC daily)');
+  console.log('  XOutreach            — 0 */4 * * *  (every 4 hours)');
 }

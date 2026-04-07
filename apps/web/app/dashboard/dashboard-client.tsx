@@ -14,6 +14,7 @@ import { ContentQueue } from '@/components/content-queue';
 import { GrowthBriefPreview } from '@/components/growth-brief-preview';
 import { InsightsChat } from '@/components/insights-chat';
 import { MentionsFeed } from '@/components/mentions-feed';
+import { XOutreachFeed } from '@/components/x-outreach-feed';
 import { CommunityOutreach } from '@/components/community-outreach';
 import { CommandConsole } from '@/components/command-console';
 import { RevenueForecastCard } from '@/components/revenue-forecast-card';
@@ -380,6 +381,10 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
       {activeTab === 'mentions' && (
         <div className="mt-8 space-y-6">
           <MentionsFeed mentions={mentions} />
+          <div className="mt-8">
+            <h2 className="mb-4 text-lg font-semibold text-white">Outreach</h2>
+            <XOutreachFeed />
+          </div>
         </div>
       )}
 
