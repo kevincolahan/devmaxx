@@ -18,14 +18,40 @@ export class ContentGenerationAgent extends BaseAgent {
     super('ContentGenerationAgent');
   }
 
-  buildSystemPrompt(_ctx: AgentContext): string {
-    return `You are a Roblox content strategist for Devmaxx. You generate marketing and in-game content based on real performance data.
+  buildSystemPrompt(ctx: AgentContext): string {
+    const input = ctx.inputData as Record<string, unknown>;
+    const gameEligible = input.gameEligible as boolean;
 
-For each top agent outcome from the past week, generate:
-1. X/Twitter post: Under 280 chars. Hook + stat + CTA. Use creator's voice, not corporate. Include relevant emoji.
-2. LinkedIn post: 3 paragraphs. Creator economy angle. Data-driven storytelling. End with engagement question.
+    let prompt = `You are a content strategist for Devmaxx (devmaxx.app) — an AI-powered platform that helps Roblox game creators maximize their DevEx earnings through autonomous agents.
+
+IMPORTANT RULES:
+- Generate PLATFORM MARKETING content about Devmaxx the product — NOT about any specific Roblox game.
+- NEVER mention any specific game name in social posts.
+- Focus on: the Roblox creator economy, DevEx optimization tips, pricing analytics insights, industry stats, and Devmaxx platform benefits.
+- Position Devmaxx as the essential tool for serious Roblox creators.
+
+Generate the following social content:
+1. X/Twitter post: Under 280 chars. Hook + stat or insight + CTA to devmaxx.app. Conversational creator voice, not corporate. Include relevant emoji.
+2. LinkedIn post: 3 paragraphs. Creator economy angle. Data-driven storytelling about Roblox monetization. End with engagement question. Tag Devmaxx.
+
+Topics to draw from:
+- Roblox creator economy growth and DevEx trends
+- How AI agents optimize game revenue (pricing, retention, content)
+- Analytics insights (DAU patterns, retention benchmarks, monetization best practices)
+- Platform updates and new Devmaxx features
+- Creator success patterns and industry benchmarks`;
+
+    if (gameEligible) {
+      prompt += `
+
+GAME-SPECIFIC CONTENT (this game qualifies with real DAU and revenue):
+Also generate:
 3. In-game event idea: name, mechanic (what players do), reward, duration (1-7 days), estimated DAU lift %.
 4. Item description rewrite: Conversion-optimized. Highlight value proposition. Create urgency or exclusivity.
+Do NOT mention the game name in social posts — game-specific content is for event ideas and item descriptions only.`;
+    }
+
+    prompt += `
 
 Self-rate each piece 1-10 on quality:
 - 9-10: Exceptional, viral potential
@@ -47,26 +73,32 @@ Respond ONLY with valid JSON:
       "qualityScore": 8
     },
     {
-      "type": "event_idea",
-      "platform": null,
-      "content": "{ name, mechanic, reward, duration, estimatedDauLift }",
-      "qualityScore": 9
+      "type": "social_post",
+      "platform": "linkedin",
+      "content": "The LinkedIn post content",
+      "qualityScore": 8
     }
   ],
   "summary": "Brief summary of what was generated and why"
 }`;
+
+    return prompt;
   }
 
   buildUserPrompt(ctx: AgentContext): string {
     const input = ctx.inputData as Record<string, unknown>;
+    const gameEligible = input.gameEligible as boolean;
 
-    let prompt = `Generate content for "${input.gameName}" (genre: ${(input.genre as string[])?.join(', ') || 'unknown'}).\n\n`;
+    let prompt = `Generate Devmaxx platform marketing content for the Roblox creator economy.\n\n`;
 
-    prompt += `TOP OUTCOMES THIS WEEK (by Robux impact):\n`;
-    prompt += JSON.stringify(input.topOutcomes, null, 2) + '\n\n';
+    const topOutcomes = input.topOutcomes as unknown[];
+    if (topOutcomes && topOutcomes.length > 0) {
+      prompt += `AGENT OUTCOMES THIS WEEK (use as inspiration for insights, but do NOT mention the game name):\n`;
+      prompt += JSON.stringify(topOutcomes, null, 2) + '\n\n';
+    }
 
     if (input.currentMetrics) {
-      prompt += `CURRENT METRICS:\n`;
+      prompt += `ANONYMIZED METRICS (use as data points for industry insights):\n`;
       prompt += JSON.stringify(input.currentMetrics, null, 2) + '\n\n';
     }
 
@@ -75,7 +107,13 @@ Respond ONLY with valid JSON:
       prompt += JSON.stringify(input.existingContent, null, 2) + '\n\n';
     }
 
-    prompt += `Generate X/Twitter post, LinkedIn post, event idea, and item description. Only output pieces rated 7+.`;
+    prompt += `Generate an X/Twitter post and a LinkedIn post about Devmaxx and the Roblox creator economy.`;
+
+    if (gameEligible) {
+      prompt += ` Also generate an in-game event idea and an item description rewrite (genre: ${(input.genre as string[])?.join(', ') || 'unknown'}).`;
+    }
+
+    prompt += ` Only output pieces rated 7+.`;
     return prompt;
   }
 
@@ -177,12 +215,19 @@ Respond ONLY with valid JSON:
       take: 10,
     });
 
+    // Only generate game-specific content (event ideas, item descriptions) if
+    // the game has real engagement — DAU > 100 and revenue > 0
+    const gameEligible = latestSnapshot
+      ? latestSnapshot.dau > 100 && latestSnapshot.robuxEarned > 0
+      : false;
+
     const context: AgentContext = {
       creatorId,
       gameId,
       inputData: {
         gameName: game.name,
         genre: game.genre,
+        gameEligible,
         topOutcomes: topOutcomes.map((o) => ({
           agent: o.agentName,
           action: o.action,

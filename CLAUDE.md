@@ -65,8 +65,13 @@ content generation, and weekly growth briefs. Creators connect once and receive 
 - **Every agent run must write to AgentRun table** with robuxImpact field populated
 
 ### Orchestration
-- **Tool:** n8n self-hosted on Railway
-- **Workflows:** Stored as JSON exports in `/infra/n8n/`
+- **Cron scheduler:** `apps/api/src/cron/scheduler.ts` — node-cron running inside Railway API service (interim while n8n deploys)
+- **Timeout protection:** All agent runs wrapped in 30s timeout, all cron jobs in 5min max runtime, job lock guard prevents overlapping runs
+- **Shared timeout utility:** `apps/api/src/lib/timeout.ts` — `withTimeout()`, `TimeoutError`, constants
+- **Roblox API timeout:** All fetch calls in `apps/api/src/lib/roblox.ts` use 10s `AbortController` timeout
+- **DB connection pool:** `connection_limit=5&connect_timeout=10` appended to DATABASE_URL in `apps/api/src/lib/db.ts`
+- **Express request timeout:** Global 5min middleware returns 504
+- **n8n workflows:** Stored as JSON exports in `/infra/n8n/` (not yet deployed)
 - **Internal networking:** Use Railway service name as hostname between services
 
 ### Email
@@ -102,15 +107,40 @@ devmaxx/
 ├── apps/
 │   ├── web/                    # Next.js 14 — Vercel
 │   │   ├── app/                # App Router pages
+│   │   │   ├── api/content/    # Content API routes (status, post-to-x, post-to-linkedin, post-to-tiktok, post-to-instagram)
+│   │   │   ├── api/insights/   # Ask Devmaxx chat (SSE streaming)
+│   │   │   └── dashboard/      # Dashboard with tabs (Overview, Ask Devmaxx, Pricing, Support, Content, Brief, Recs)
 │   │   ├── components/         # React components
+│   │   │   ├── content-queue.tsx    # Content tab with platform post buttons, filters, news source metadata
+│   │   │   ├── insights-chat.tsx    # Streaming chat interface with Claude
+│   │   │   ├── command-console.tsx  # Natural language game command UI (Copilot for Roblox)
+│   │   │   ├── community-outreach.tsx    # Community outreach dashboard
+│   │   │   ├── event-impact-timeline.tsx # Event impact visualization
+│   │   │   ├── revenue-forecast-card.tsx # Revenue forecasting display
+│   │   │   └── sentiment-analysis.tsx    # Player sentiment dashboard
 │   │   ├── emails/             # React Email templates
 │   │   └── public/             # Static assets
 │   └── api/                    # Node.js API — Railway
 │       ├── src/
 │       │   ├── agents/         # Product agents
-│       │   ├── marketing/      # Marketing agents
+│       │   │   └── news-monitor.ts  # Roblox news → content pipeline (Apify scraping + Claude scoring)
+│       │   ├── cron/           # Cron scheduler with timeout guards
+│       │   ├── routes/         # API routes (all agent runs wrapped in 30s timeout)
+│       │   ├── lib/            # Shared utilities
+│       │   │   ├── twitter.ts       # X/Twitter API v2 posting (OAuth 1.0a)
+│       │   │   ├── linkedin.ts      # LinkedIn API v2 UGC Posts
+│       │   │   ├── tiktok.ts        # TikTok Content Posting API
+│       │   │   ├── instagram.ts     # Instagram Graph API (image + caption)
+│       │   │   ├── timeout.ts       # Shared withTimeout utility
+│       │   │   └── roblox.ts        # Roblox Open Cloud API (10s fetch timeouts)
 │       │   ├── routes/         # API routes
-│       │   └── lib/            # Shared utilities
+│       │   │   ├── actions.ts         # One-click action execution endpoint
+│       │   │   ├── commands.ts        # Natural language game command endpoint
+│       │   │   └── onboarding.ts      # Onboarding email trigger endpoint
+│       │   ├── scripts/        # One-off scripts
+│       │   │   ├── seed-content.ts      # Seed ContentPiece table
+│       │   │   └── railway-restart.ts   # Emergency Railway service restart via GraphQL
+│       │   └── marketing/      # Marketing agents
 │       └── infra/
 │           └── n8n/            # n8n workflow JSON exports
 └── packages/
@@ -212,11 +242,11 @@ model ContentPiece {
   id           String    @id @default(cuid())
   gameId       String?
   creatorId    String?
-  type         String    // event_idea|item_desc|game_pass|social_post|email|ad_creative
-  platform     String?   // x|linkedin|instagram|youtube|blog|email
+  type         String    // event_idea|item_desc|game_pass|social_post|email|ad_creative|news_response
+  platform     String?   // x|linkedin|instagram|tiktok|youtube|blog|email
   content      String
   qualityScore Int?
-  status       String    @default("draft") // draft|approved|published|rejected
+  status       String    @default("draft") // draft|pending_review|approved|published|rejected
   performance  Json?
   sourceData   Json?
   publishedAt  DateTime?
@@ -351,6 +381,12 @@ export abstract class BaseAgent {
 | RetentionEngineerAgent | `agents/retention.ts` | Triggered by metrics drop | 2 |
 | ContentGenerationAgent | `agents/content-gen.ts` | Weekly Mon 7am UTC | 2 |
 | RobloxNewsMonitorAgent | `agents/news-monitor.ts` | Weekly Mon 6am UTC | 2 |
+| PlayerSentimentAgent | `agents/player-sentiment.ts` | Daily cron | 2 |
+| EventImpactAnalyzer | `agents/event-impact.ts` | On game update detected | 2 |
+| RevenueForecastingAgent | `agents/revenue-forecast.ts` | Weekly cron | 2 |
+| OutcomeTrackingAgent | `agents/outcome-tracking.ts` | After agent actions | 2 |
+| CommunityOutreachAgent | `agents/community-outreach.ts` | Weekly — Reddit + DevForum | 3 |
+| CommandExecutorAgent | `agents/command-executor.ts` | On natural language command | 2 |
 
 ---
 
@@ -482,6 +518,23 @@ N8N_WEBHOOK_URL=
 
 ---
 
+## Key Features Added (April 2026)
+
+- **Natural Language Game Commands:** "Copilot for Roblox" — creators type commands in plain English, CommandExecutorAgent interprets and executes via Roblox APIs (`routes/commands.ts`, `command-console.tsx`)
+- **One-Click Action System:** Agent recommendations include executable actions — one click to apply (`routes/actions.ts`)
+- **Genre Benchmarking:** MetricsMonitorAgent now compares game metrics against genre averages
+- **Player Sentiment Analysis:** PlayerSentimentAgent analyzes player feedback and surfaces insights
+- **Event Impact Analysis:** EventImpactAnalyzer detects game updates and measures their impact on metrics
+- **Revenue Forecasting:** RevenueForecastingAgent projects future Robux earnings based on trends
+- **Outcome Tracking:** OutcomeTrackingAgent measures predicted vs actual impact of agent actions
+- **Community Outreach:** CommunityOutreachAgent posts weekly to Reddit and Roblox DevForum
+- **Welcome Onboarding Sequence:** 3-email drip campaign via Resend (`lib/onboarding-emails.ts`)
+- **Content Seed Route:** POST `/api/content/generate-seed` for bulk content generation
+- **Autopilot Toggle Fix:** Proper plan gating, error handling, and upgrade button
+- **Stripe Checkout Fixes:** Handle missing customer, fallback to email, proper error handling
+
+---
+
 ## Build Order (Phases)
 
 1. **Phase 1 (Week 1):** Monorepo setup, Prisma schema, NextAuth magic link, Roblox OAuth, Stripe checkout, n8n on Railway, BaseAgent class
@@ -512,5 +565,5 @@ Today I am building: [DESCRIBE WHAT YOU WANT TO BUILD TODAY]
 
 ---
 
-*Last updated: March 2026*
+*Last updated: April 2026*
 *Devmaxx · devmaxx.app · Maxx your DevEx*

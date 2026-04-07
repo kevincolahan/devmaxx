@@ -313,53 +313,72 @@ async function runNewsMonitor() {
 
 async function postOnePiece(
   platform: string,
-  poster: (text: string) => Promise<{ success: boolean; postId?: string; postUrl?: string; error?: string }>
+  poster: (text: string) => Promise<{ success: boolean; postId?: string; postUrl?: string; tweetId?: string; tweetUrl?: string; error?: string }>
 ): Promise<boolean> {
-  const piece = await db.contentPiece.findFirst({
-    where: { platform, status: 'approved' },
-    orderBy: { createdAt: 'asc' },
-  });
-
-  if (!piece) {
-    log('SocialPoster', `No approved ${platform} posts`);
+  // Quiet hours check — never post between 11pm-7am UTC
+  const hour = new Date().getUTCHours();
+  if (hour >= 23 || hour < 7) {
+    log('SocialPoster', `[${platform}] Skipping — quiet hours (${hour}:00 UTC)`);
     return false;
   }
 
+  const pieces = await db.contentPiece.findMany({
+    where: { platform, status: 'approved', publishedAt: null },
+    orderBy: { createdAt: 'asc' },
+    take: 5,
+  });
+
+  log('SocialPoster', `[${platform}] Found ${pieces.length} approved posts with publishedAt=null`);
+
+  if (pieces.length === 0) {
+    return false;
+  }
+
+  const piece = pieces[0];
+  log('SocialPoster', `[${platform}] Attempting piece ${piece.id} (${piece.content.length} chars): "${piece.content.slice(0, 80)}..."`);
+
   if (platform === 'x' && piece.content.length > 280) {
-    log('SocialPoster', `Skipping ${platform} ${piece.id} — exceeds 280 chars`);
+    log('SocialPoster', `[${platform}] Skipping ${piece.id} — exceeds 280 chars (${piece.content.length})`);
     return false;
   }
 
   try {
+    log('SocialPoster', `[${platform}] Calling poster function for ${piece.id}...`);
     const result = await withTimeout(
       poster(piece.content),
       AGENT_RUN_TIMEOUT_MS,
       `SocialPoster:${platform}:${piece.id}`
     );
 
+    log('SocialPoster', `[${platform}] Poster returned: success=${result.success}, postId=${result.postId ?? result.tweetId ?? 'none'}, error=${result.error ?? 'none'}`);
+
     if (result.success) {
+      // Normalize field names — postTweet returns tweetId/tweetUrl, others return postId/postUrl
+      const postId = result.postId ?? result.tweetId;
+      const postUrl = result.postUrl ?? result.tweetUrl;
+
       await db.contentPiece.update({
         where: { id: piece.id },
         data: {
           status: 'published',
           publishedAt: new Date(),
           performance: {
-            postId: result.postId,
-            postUrl: result.postUrl,
+            postId,
+            postUrl,
             platform,
             postedAt: new Date().toISOString(),
             autoPosted: true,
           },
         },
       });
-      log('SocialPoster', `[${platform}] Posted ${piece.id}: ${result.postUrl ?? result.postId ?? 'ok'}`);
+      log('SocialPoster', `[${platform}] SUCCESS — posted ${piece.id}: ${postUrl ?? postId ?? 'ok'}`);
       return true;
     } else {
-      log('SocialPoster', `[${platform}] Failed ${piece.id}: ${result.error}`);
+      log('SocialPoster', `[${platform}] FAILED ${piece.id}: ${result.error}`);
       return false;
     }
   } catch (err) {
-    log('SocialPoster', `[${platform}] Error ${piece.id}: ${err}`);
+    log('SocialPoster', `[${platform}] ERROR ${piece.id}: ${err}`);
     return false;
   }
 }
@@ -367,12 +386,7 @@ async function postOnePiece(
 async function runSocialPoster() {
   log('SocialPoster', 'Starting daily multi-platform auto-post');
 
-  // Quiet hours check — never post between 11pm-7am UTC
-  const hour = new Date().getUTCHours();
-  if (hour >= 23 || hour < 7) {
-    log('SocialPoster', `Skipping — quiet hours (${hour}:00 UTC)`);
-    return;
-  }
+  // Quiet hours moved into postOnePiece — each platform call checks independently
 
   const results: Record<string, boolean> = {};
 
