@@ -269,6 +269,19 @@ model XOutreachLog {
   createdAt       DateTime  @default(now())
 }
 
+model YouTubeOutreachLog {
+  id              String    @id @default(cuid())
+  videoId         String    @unique
+  channelId       String
+  videoTitle      String
+  commentDrafted  String?
+  commentPosted   Boolean   @default(false)
+  qualityScore    Int       @default(0)
+  postedAt        DateTime?
+  commentUrl      String?
+  createdAt       DateTime  @default(now())
+}
+
 model KeyValue {
   key       String   @id
   value     String

@@ -16,6 +16,7 @@ import { InsightsChat } from '@/components/insights-chat';
 import { MentionsFeed } from '@/components/mentions-feed';
 import { XOutreachFeed } from '@/components/x-outreach-feed';
 import { CommunityOutreach } from '@/components/community-outreach';
+import { YouTubeOutreachFeed } from '@/components/youtube-outreach-feed';
 import { CommandConsole } from '@/components/command-console';
 import { RevenueForecastCard } from '@/components/revenue-forecast-card';
 import { EventImpactTimeline } from '@/components/event-impact-timeline';
@@ -394,6 +395,10 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
             lastPost={communityLastPost as any}
             postHistory={communityPostHistory}
           />
+          <div className="mt-8">
+            <h2 className="mb-4 text-lg font-semibold text-white">YouTube</h2>
+            <YouTubeOutreachFeed />
+          </div>
         </div>
       )}
 

@@ -21,6 +21,7 @@ import { runRevenueForecastPipeline } from '../agents/revenue-forecast';
 import { runEventImpactPipeline } from '../agents/event-impact';
 import { runPlayerSentimentPipeline } from '../agents/player-sentiment';
 import { runXOutreachPipeline } from '../agents/x-outreach';
+import { runYouTubeOutreachPipeline } from '../agents/youtube-outreach';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -579,6 +580,21 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // YouTubeOutreach — Thursday 2pm UTC (weekly video comments)
+  cron.schedule('0 14 * * 4', guardedJob('YouTubeOutreach', async () => {
+    log('YouTubeOutreach', 'Starting weekly YouTube outreach');
+    try {
+      const result = await withTimeout(
+        runYouTubeOutreachPipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'YouTubeOutreach'
+      );
+      log('YouTubeOutreach', `Done — searched: ${result.videosSearched}, eligible: ${result.videosEligible}, commented: ${result.commentsPosted}, skipped: ${result.skipped}${result.errors.length > 0 ? `, errors: ${result.errors.length}` : ''}`);
+    } catch (err) {
+      log('YouTubeOutreach', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
@@ -600,4 +616,5 @@ export function startScheduler() {
   console.log('  SaleRestore          — 0 * * * *   (every hour)');
   console.log('  OutcomeTracking      — 0 7 * * *   (7am UTC daily)');
   console.log('  XOutreach            — 0 */4 * * *  (every 4 hours)');
+  console.log('  YouTubeOutreach      — 0 14 * * 4  (2pm UTC Thursday)');
 }
