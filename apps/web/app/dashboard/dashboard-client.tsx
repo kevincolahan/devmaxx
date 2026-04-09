@@ -21,6 +21,7 @@ import { CommandConsole } from '@/components/command-console';
 import { RevenueForecastCard } from '@/components/revenue-forecast-card';
 import { EventImpactTimeline } from '@/components/event-impact-timeline';
 import { SentimentAnalysis } from '@/components/sentiment-analysis';
+import { ReferralPanel } from '@/components/referral-panel';
 
 interface Snapshot {
   date: string;
@@ -176,6 +177,18 @@ interface DashboardData {
     data: Record<string, unknown>;
     sentAt: string;
   } | null;
+  referral: {
+    referralCode: string;
+    referralCredits: number;
+    referrals: Array<{
+      id: string;
+      referredEmail: string;
+      status: string;
+      convertedAt: string | null;
+      creditedAt: string | null;
+      createdAt: string;
+    }>;
+  };
   stats: {
     totalGames: number;
     totalRuns: number;
@@ -188,10 +201,10 @@ interface DashboardClientProps {
   userEmail: string;
 }
 
-type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'ask';
+type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'referrals' | 'ask';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
-  const { creator, games, recentRuns, recommendations, contentPieces, mentions, sentiment, events, forecast, communityLastPost, communityPostHistory, lastBrief, stats } = data;
+  const { creator, games, recentRuns, recommendations, contentPieces, mentions, sentiment, events, forecast, communityLastPost, communityPostHistory, lastBrief, referral, stats } = data;
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const searchParams = useSearchParams();
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false);
@@ -220,6 +233,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
     { key: 'community', label: 'Community' },
     { key: 'brief', label: 'Growth Brief' },
     { key: 'recommendations', label: 'Recs', count: recommendations.length },
+    { key: 'referrals', label: 'Referrals', count: referral.referralCredits },
   ];
 
   return (
@@ -416,6 +430,16 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
       {activeTab === 'recommendations' && (
         <div className="mt-8 space-y-6">
           <RecommendationsPanel recommendations={recommendations} creatorId={creator?.id ?? ''} gameId={games[0]?.id} />
+        </div>
+      )}
+
+      {activeTab === 'referrals' && (
+        <div className="mt-8 space-y-6">
+          <ReferralPanel
+            referralCode={referral.referralCode}
+            referralCredits={referral.referralCredits}
+            referrals={referral.referrals}
+          />
         </div>
       )}
     </main>

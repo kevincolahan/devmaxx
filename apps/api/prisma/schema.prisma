@@ -65,6 +65,9 @@ model Creator {
   plan                 String     @default("free")
   autopilot            Boolean    @default(false)
   timezone             String     @default("UTC")
+  referralCode         String?    @unique
+  referredBy           String?
+  referralCredits      Int        @default(0)
   games                Game[]
   agentRuns            AgentRun[]
   createdAt            DateTime   @default(now())
@@ -279,6 +282,18 @@ model YouTubeOutreachLog {
   qualityScore    Int?
   postedAt        DateTime?
   commentUrl      String?
+  createdAt       DateTime  @default(now())
+}
+
+model Referral {
+  id              String    @id @default(cuid())
+  referrerCode    String
+  referrerId      String
+  referredId      String
+  referredEmail   String
+  status          String    @default("pending")
+  convertedAt     DateTime?
+  creditedAt      DateTime?
   createdAt       DateTime  @default(now())
 }
 

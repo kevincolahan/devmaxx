@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ReferralBanner } from '@/components/referral-banner';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="min-h-screen bg-gray-950 text-white antialiased">
+        <ReferralBanner />
         {children}
       </body>
     </html>

@@ -106,6 +106,14 @@ export default async function DashboardPage() {
     take: 50,
   });
 
+  const referrals = creator
+    ? await db.referral.findMany({
+        where: { referrerId: creator.id },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      })
+    : [];
+
   const dashboardData = {
     creator: creator
       ? {
@@ -248,6 +256,18 @@ export default async function DashboardPage() {
       replyTweetId: m.replyTweetId,
       processedAt: m.processedAt.toISOString(),
     })),
+    referral: {
+      referralCode: creator?.referralCode ?? '',
+      referralCredits: creator?.referralCredits ?? 0,
+      referrals: referrals.map((r) => ({
+        id: r.id,
+        referredEmail: r.referredEmail,
+        status: r.status,
+        convertedAt: r.convertedAt?.toISOString() ?? null,
+        creditedAt: r.creditedAt?.toISOString() ?? null,
+        createdAt: r.createdAt.toISOString(),
+      })),
+    },
     stats: {
       totalGames: creator?.games.length ?? 0,
       totalRuns,
