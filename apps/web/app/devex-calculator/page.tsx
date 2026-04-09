@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useCallback } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 
@@ -33,6 +33,18 @@ function formatNumber(value: number): string {
 }
 
 export default function DevExCalculatorPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center text-gray-500">
+        Loading calculator...
+      </div>
+    }>
+      <DevExCalculatorContent />
+    </Suspense>
+  );
+}
+
+function DevExCalculatorContent() {
   const searchParams = useSearchParams();
 
   const [dau, setDau] = useState(Number(searchParams.get('dau')) || 1000);
