@@ -254,6 +254,34 @@ model MentionLog {
   processedAt     DateTime @default(now())
 }
 
+model XOutreachLog {
+  id              String    @id @default(cuid())
+  tweetId         String    @unique
+  authorId        String
+  authorUsername   String
+  tweetContent    String
+  category        String
+  replyDrafted    String?
+  replyPosted     Boolean   @default(false)
+  postedAt        DateTime?
+  tweetUrl        String?
+  replyUrl        String?
+  createdAt       DateTime  @default(now())
+}
+
+model YouTubeOutreachLog {
+  id              String    @id @default(cuid())
+  videoId         String    @unique
+  channelId       String
+  videoTitle      String
+  commentDrafted  String?
+  commentPosted   Boolean   @default(false)
+  qualityScore    Int?
+  postedAt        DateTime?
+  commentUrl      String?
+  createdAt       DateTime  @default(now())
+}
+
 model KeyValue {
   key       String   @id
   value     String
