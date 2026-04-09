@@ -70,6 +70,43 @@ export function ContentQueue({ items }: ContentQueueProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [postingId, setPostingId] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>('all');
+  const [showAnnounceModal, setShowAnnounceModal] = useState(false);
+  const [announceForm, setAnnounceForm] = useState({ featureName: '', description: '', url: '', type: 'feature' as string });
+  const [announcing, setAnnouncing] = useState(false);
+
+  async function handleAnnounce() {
+    if (!announceForm.featureName || !announceForm.description || !announceForm.url) return;
+    setAnnouncing(true);
+    try {
+      const res = await fetch('/api/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(announceForm),
+      });
+      const data = await res.json();
+      if (res.ok && data.posts) {
+        const newItems: ContentItem[] = data.posts.map((p: { platform: string; contentPieceId: string; content: string }) => ({
+          id: p.contentPieceId,
+          type: 'social_post',
+          platform: p.platform,
+          content: p.content,
+          qualityScore: null,
+          status: 'approved',
+          sourceData: { agentName: 'FeatureAnnouncementAgent' },
+          createdAt: new Date().toISOString(),
+        }));
+        setLocalItems((prev) => [...newItems, ...prev]);
+        setShowAnnounceModal(false);
+        setAnnounceForm({ featureName: '', description: '', url: '', type: 'feature' });
+      } else {
+        alert(`Failed: ${data.error ?? 'Unknown error'}`);
+      }
+    } catch (err) {
+      alert(`Error: ${String(err)}`);
+    } finally {
+      setAnnouncing(false);
+    }
+  }
 
   async function handleCopy(id: string, text: string) {
     try {
@@ -209,8 +246,84 @@ export function ContentQueue({ items }: ContentQueueProps) {
 
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+      {/* Announce Feature Modal */}
+      {showAnnounceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+          <div className="w-full max-w-md rounded-xl border border-gray-700 bg-gray-900 p-6">
+            <h3 className="mb-4 text-lg font-semibold text-white">Announce Feature</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-xs text-gray-400">Feature Name</label>
+                <input
+                  type="text"
+                  value={announceForm.featureName}
+                  onChange={(e) => setAnnounceForm((f) => ({ ...f, featureName: e.target.value }))}
+                  placeholder="DevEx Calculator"
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-gray-400">Description</label>
+                <textarea
+                  value={announceForm.description}
+                  onChange={(e) => setAnnounceForm((f) => ({ ...f, description: e.target.value }))}
+                  placeholder="What does this feature do?"
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-gray-400">URL</label>
+                <input
+                  type="text"
+                  value={announceForm.url}
+                  onChange={(e) => setAnnounceForm((f) => ({ ...f, url: e.target.value }))}
+                  placeholder="https://devmaxx.app/..."
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs text-gray-400">Type</label>
+                <select
+                  value={announceForm.type}
+                  onChange={(e) => setAnnounceForm((f) => ({ ...f, type: e.target.value }))}
+                  className="w-full rounded-lg border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-white"
+                >
+                  <option value="feature">Feature</option>
+                  <option value="tool">Tool</option>
+                  <option value="improvement">Improvement</option>
+                </select>
+              </div>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={handleAnnounce}
+                disabled={announcing || !announceForm.featureName || !announceForm.description || !announceForm.url}
+                className="flex-1 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+              >
+                {announcing ? 'Generating...' : 'Generate Posts'}
+              </button>
+              <button
+                onClick={() => setShowAnnounceModal(false)}
+                className="rounded-lg border border-gray-700 px-4 py-2 text-sm text-gray-400 hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="mb-4 flex items-center justify-between">
-        <h3 className="font-semibold text-white">Content Queue</h3>
+        <div className="flex items-center gap-3">
+          <h3 className="font-semibold text-white">Content Queue</h3>
+          <button
+            onClick={() => setShowAnnounceModal(true)}
+            className="rounded-md bg-indigo-600/20 px-2.5 py-1 text-xs font-medium text-indigo-400 transition hover:bg-indigo-600/30"
+          >
+            + Announce Feature
+          </button>
+        </div>
         <div className="flex gap-1">
           {(['all', 'queued', 'published', 'rejected'] as FilterStatus[]).map((f) => (
             <button

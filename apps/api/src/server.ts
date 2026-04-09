@@ -22,7 +22,11 @@ import { growthBriefRouter } from './routes/growth-brief';
 import { actionsRouter } from './routes/actions';
 import { commandsRouter } from './routes/commands';
 import { onboardingRouter } from './routes/onboarding';
+import { announcementsRouter } from './routes/announcements';
 import { startScheduler } from './cron/scheduler';
+import { autoAnnounceFeatures } from './agents/feature-announcement';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -52,6 +56,7 @@ app.use('/api/growth-brief', growthBriefRouter);
 app.use('/api/actions', actionsRouter);
 app.use('/api/commands', commandsRouter);
 app.use('/api/onboarding', onboardingRouter);
+app.use('/api/announcements', announcementsRouter);
 
 async function startup() {
   // Verify DB connection before accepting traffic
@@ -87,6 +92,26 @@ async function startup() {
     } catch (err) {
       console.error('[STARTUP] Scheduler failed to start:', err);
       // Don't exit — let the API serve requests even if scheduler fails
+    }
+
+    // Auto-announce new features from FEATURES.md (fire and forget)
+    try {
+      const featuresPath = join(__dirname, '..', 'FEATURES.md');
+      const featuresContent = readFileSync(featuresPath, 'utf-8');
+      autoAnnounceFeatures(db, featuresContent)
+        .then((result) => {
+          if (result.announced.length > 0) {
+            console.log(`[STARTUP] Auto-announced features: ${result.announced.join(', ')}`);
+          }
+          if (result.skipped.length > 0) {
+            console.log(`[STARTUP] Already announced: ${result.skipped.join(', ')}`);
+          }
+        })
+        .catch((err) => {
+          console.error('[STARTUP] Auto-announce failed:', err);
+        });
+    } catch (err) {
+      console.log('[STARTUP] No FEATURES.md found or read error — skipping auto-announce');
     }
   });
 }
