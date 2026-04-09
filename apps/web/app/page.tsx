@@ -23,6 +23,14 @@ export default function Home() {
           Pricing
         </Link>
       </div>
+      <div className="mt-6">
+        <Link
+          href="/devex-calculator"
+          className="text-sm text-gray-500 transition hover:text-indigo-400"
+        >
+          Free DevEx Calculator &rarr;
+        </Link>
+      </div>
     </main>
   );
 }

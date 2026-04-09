@@ -359,6 +359,14 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
           <div className="mt-8">
             <AgentRunFeed runs={recentRuns} />
           </div>
+          <div className="mt-6 text-center">
+            <a
+              href="/devex-calculator"
+              className="text-sm text-gray-500 transition hover:text-indigo-400"
+            >
+              See full DevEx projection &rarr;
+            </a>
+          </div>
         </>
       )}
 
