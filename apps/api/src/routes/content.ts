@@ -391,6 +391,14 @@ contentRouter.post('/trigger-x', async (_req, res) => {
   debug.credentialsConfigured = creds.configured;
   debug.credentialsMissing = creds.missing;
 
+  // Add key lengths for debugging without exposing secrets
+  debug.keyLengths = {
+    apiKey: (process.env.TWITTER_API_KEY || '').trim().length,
+    apiSecret: (process.env.TWITTER_API_SECRET || '').trim().length,
+    accessToken: (process.env.TWITTER_ACCESS_TOKEN || '').trim().length,
+    accessSecret: (process.env.TWITTER_ACCESS_SECRET || '').trim().length,
+  };
+
   if (!creds.configured) {
     res.json({ success: false, debug, error: 'Twitter credentials not configured' });
     return;

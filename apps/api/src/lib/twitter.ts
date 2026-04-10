@@ -68,11 +68,18 @@ function generateOAuthSignature(
     .update(signatureBase)
     .digest('base64');
 
+  // Detailed debug logging
+  console.log(`[Twitter OAuth] === SIGNATURE DEBUG ===`);
   console.log(`[Twitter OAuth] Method: ${method}`);
   console.log(`[Twitter OAuth] URL: ${url}`);
-  console.log(`[Twitter OAuth] Signature base length: ${signatureBase.length}`);
-  console.log(`[Twitter OAuth] Consumer key: ${config.apiKey.slice(0, 6)}...`);
-  console.log(`[Twitter OAuth] Token: ${config.accessToken.slice(0, 6)}...`);
+  console.log(`[Twitter OAuth] Timestamp: ${params.oauth_timestamp}`);
+  console.log(`[Twitter OAuth] Nonce: ${params.oauth_nonce}`);
+  console.log(`[Twitter OAuth] Signature base (first 200): ${signatureBase.slice(0, 200)}`);
+  console.log(`[Twitter OAuth] Signing key (first 20): ${signingKey.slice(0, 20)}...`);
+  console.log(`[Twitter OAuth] Signature: ${signature}`);
+  console.log(`[Twitter OAuth] Key lengths: apiKey=${config.apiKey.length}, apiSecret=${config.apiSecret.length}, accessToken=${config.accessToken.length}, accessSecret=${config.accessSecret.length}`);
+  console.log(`[Twitter OAuth] Consumer key: ${config.apiKey.slice(0, 8)}...${config.apiKey.slice(-4)}`);
+  console.log(`[Twitter OAuth] Access token: ${config.accessToken.slice(0, 8)}...${config.accessToken.slice(-4)}`);
 
   return signature;
 }
@@ -103,7 +110,9 @@ function buildAuthorizationHeader(
     .map((key) => `${percentEncode(key)}="${percentEncode(oauthParams[key])}"`)
     .join(', ');
 
-  return `OAuth ${headerParts}`;
+  const authHeader = `OAuth ${headerParts}`;
+  console.log(`[Twitter OAuth] Authorization header (first 120): ${authHeader.slice(0, 120)}...`);
+  return authHeader;
 }
 
 // ─── Public API ──────────────────────────────────────────────
