@@ -379,6 +379,99 @@ contentRouter.post('/post-to-instagram', async (req, res) => {
   }
 });
 
+// ─── Debug: manually trigger X posting ──────────────────────
+
+contentRouter.post('/trigger-x', async (_req, res) => {
+  const debug: Record<string, unknown> = {
+    timestamp: new Date().toISOString(),
+  };
+
+  // 1. Check Twitter credentials
+  const creds = checkTwitterCredentials();
+  debug.credentialsConfigured = creds.configured;
+  debug.credentialsMissing = creds.missing;
+
+  if (!creds.configured) {
+    res.json({ success: false, debug, error: 'Twitter credentials not configured' });
+    return;
+  }
+
+  // 2. Query for approved X posts
+  const allApproved = await db.contentPiece.findMany({
+    where: { platform: 'x', status: 'approved', publishedAt: null },
+    orderBy: { createdAt: 'asc' },
+    take: 5,
+    select: { id: true, content: true, status: true, platform: true, publishedAt: true, createdAt: true },
+  });
+
+  debug.approvedXPosts = allApproved.length;
+  debug.posts = allApproved.map((p) => ({
+    id: p.id,
+    chars: p.content.length,
+    preview: p.content.slice(0, 100),
+    status: p.status,
+    platform: p.platform,
+    publishedAt: p.publishedAt,
+    createdAt: p.createdAt,
+  }));
+
+  // Also check if there are posts with platform='twitter' instead of 'x'
+  const twitterPlatform = await db.contentPiece.count({
+    where: { platform: 'twitter', status: 'approved', publishedAt: null },
+  });
+  debug.postsWithPlatformTwitter = twitterPlatform;
+
+  if (allApproved.length === 0) {
+    res.json({ success: false, debug, error: 'No approved X posts with publishedAt=null found' });
+    return;
+  }
+
+  const piece = allApproved[0];
+  debug.attemptingPost = { id: piece.id, chars: piece.content.length };
+
+  if (piece.content.length > 280) {
+    res.json({ success: false, debug, error: `Post exceeds 280 chars (${piece.content.length})` });
+    return;
+  }
+
+  // 3. Attempt to post
+  try {
+    console.log(`[trigger-x] Attempting to post piece ${piece.id}`);
+    const result = await postTweet(piece.content);
+
+    debug.twitterApiResult = {
+      success: result.success,
+      tweetId: result.tweetId,
+      tweetUrl: result.tweetUrl,
+      error: result.error,
+    };
+
+    if (result.success) {
+      await db.contentPiece.update({
+        where: { id: piece.id },
+        data: {
+          status: 'published',
+          publishedAt: new Date(),
+          performance: {
+            tweetId: result.tweetId,
+            tweetUrl: result.tweetUrl,
+            platform: 'x',
+            postedAt: new Date().toISOString(),
+            manualTrigger: true,
+          },
+        },
+      });
+      debug.dbUpdated = true;
+    }
+
+    res.json({ success: result.success, debug });
+  } catch (err) {
+    debug.error = String(err);
+    console.error('[trigger-x] Error:', err);
+    res.json({ success: false, debug });
+  }
+});
+
 // ─── Cleanup test game content ──────────────────────────────
 
 contentRouter.post('/cleanup-test-content', async (_req, res) => {
