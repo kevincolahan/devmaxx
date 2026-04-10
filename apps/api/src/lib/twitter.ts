@@ -1,15 +1,19 @@
 import { createHmac, randomBytes } from 'crypto';
 
-// ─── Twitter API v2 — OAuth 1.0a Signed Requests ────────────
+// ─── OAuth 1.0a Percent Encoding ────────────────────────────
 
-interface TwitterConfig {
-  apiKey: string;
-  apiSecret: string;
-  accessToken: string;
-  accessSecret: string;
+function encode(str: string): string {
+  return encodeURIComponent(str)
+    .replace(/!/g, '%21')
+    .replace(/'/g, '%27')
+    .replace(/\(/g, '%28')
+    .replace(/\)/g, '%29')
+    .replace(/\*/g, '%2A');
 }
 
-function getConfig(): TwitterConfig {
+// ─── OAuth 1.0a Authorization Header ────────────────────────
+
+function buildOAuthHeader(method: string, url: string): string {
   const apiKey = (process.env.TWITTER_API_KEY || '').trim();
   const apiSecret = (process.env.TWITTER_API_SECRET || '').trim();
   const accessToken = (process.env.TWITTER_ACCESS_TOKEN || '').trim();
@@ -25,93 +29,60 @@ function getConfig(): TwitterConfig {
     throw new Error(`Missing Twitter credentials: ${missing.join(', ')}`);
   }
 
-  return { apiKey, apiSecret, accessToken, accessSecret };
-}
-
-function percentEncode(str: string): string {
-  return encodeURIComponent(str)
-    .replace(/!/g, '%21')
-    .replace(/\*/g, '%2A')
-    .replace(/'/g, '%27')
-    .replace(/\(/g, '%28')
-    .replace(/\)/g, '%29');
-}
-
-function generateNonce(): string {
-  // Twitter expects alphanumeric nonce — 32 hex chars
-  return randomBytes(32).toString('hex').slice(0, 32);
-}
-
-function generateOAuthSignature(
-  method: string,
-  url: string,
-  params: Record<string, string>,
-  config: TwitterConfig
-): string {
-  // Sort parameters alphabetically by key
-  const sortedParams = Object.keys(params)
-    .sort()
-    .map((key) => `${percentEncode(key)}=${percentEncode(params[key])}`)
-    .join('&');
-
-  // Build signature base string: METHOD&url&params (each percent-encoded)
-  const signatureBase = [
-    method.toUpperCase(),
-    percentEncode(url),
-    percentEncode(sortedParams),
-  ].join('&');
-
-  // Signing key: consumer_secret&token_secret (both percent-encoded)
-  const signingKey = `${percentEncode(config.apiSecret)}&${percentEncode(config.accessSecret)}`;
-
-  const signature = createHmac('sha1', signingKey)
-    .update(signatureBase)
-    .digest('base64');
-
-  // Detailed debug logging
-  console.log(`[Twitter OAuth] === SIGNATURE DEBUG ===`);
-  console.log(`[Twitter OAuth] Method: ${method}`);
-  console.log(`[Twitter OAuth] URL: ${url}`);
-  console.log(`[Twitter OAuth] Timestamp: ${params.oauth_timestamp}`);
-  console.log(`[Twitter OAuth] Nonce: ${params.oauth_nonce}`);
-  console.log(`[Twitter OAuth] Signature base (first 200): ${signatureBase.slice(0, 200)}`);
-  console.log(`[Twitter OAuth] Signing key (first 20): ${signingKey.slice(0, 20)}...`);
-  console.log(`[Twitter OAuth] Signature: ${signature}`);
-  console.log(`[Twitter OAuth] Key lengths: apiKey=${config.apiKey.length}, apiSecret=${config.apiSecret.length}, accessToken=${config.accessToken.length}, accessSecret=${config.accessSecret.length}`);
-  console.log(`[Twitter OAuth] Consumer key: ${config.apiKey.slice(0, 8)}...${config.apiKey.slice(-4)}`);
-  console.log(`[Twitter OAuth] Access token: ${config.accessToken.slice(0, 8)}...${config.accessToken.slice(-4)}`);
-
-  return signature;
-}
-
-function buildAuthorizationHeader(
-  method: string,
-  url: string,
-  config: TwitterConfig
-): string {
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const nonce = generateNonce();
+  const nonce = randomBytes(16).toString('hex');
 
   const oauthParams: Record<string, string> = {
-    oauth_consumer_key: config.apiKey,
+    oauth_consumer_key: apiKey,
     oauth_nonce: nonce,
     oauth_signature_method: 'HMAC-SHA1',
     oauth_timestamp: timestamp,
-    oauth_token: config.accessToken,
+    oauth_token: accessToken,
     oauth_version: '1.0',
   };
 
-  const signature = generateOAuthSignature(method, url, oauthParams, config);
+  // For POST with JSON body, no body params in signature
+  const allParams = { ...oauthParams };
+
+  // Sort params alphabetically
+  const sortedParams = Object.keys(allParams)
+    .sort()
+    .map((k) => `${encode(k)}=${encode(allParams[k])}`)
+    .join('&');
+
+  // Build signature base string
+  const baseString = [
+    method.toUpperCase(),
+    encode(url),
+    encode(sortedParams),
+  ].join('&');
+
+  // Build signing key
+  const signingKey = `${encode(apiSecret)}&${encode(accessSecret)}`;
+
+  // Generate signature
+  const signature = createHmac('sha1', signingKey)
+    .update(baseString)
+    .digest('base64');
+
   oauthParams.oauth_signature = signature;
 
-  // Build header: sorted, percent-encoded key="value" pairs
-  const headerParts = Object.keys(oauthParams)
-    .sort()
-    .map((key) => `${percentEncode(key)}="${percentEncode(oauthParams[key])}"`)
-    .join(', ');
+  // Build Authorization header
+  const authHeader =
+    'OAuth ' +
+    Object.keys(oauthParams)
+      .sort()
+      .map((k) => `${encode(k)}="${encode(oauthParams[k])}"`)
+      .join(', ');
 
-  const authHeader = `OAuth ${headerParts}`;
-  console.log(`[Twitter OAuth] Authorization header (first 120): ${authHeader.slice(0, 120)}...`);
+  // Debug logging
+  console.log(`[Twitter OAuth] Method: ${method}, URL: ${url}`);
+  console.log(`[Twitter OAuth] Timestamp: ${timestamp}, Nonce: ${nonce}`);
+  console.log(`[Twitter OAuth] Base string (first 200): ${baseString.slice(0, 200)}`);
+  console.log(`[Twitter OAuth] Key lengths: apiKey=${apiKey.length}, apiSecret=${apiSecret.length}, accessToken=${accessToken.length}, accessSecret=${accessSecret.length}`);
+  console.log(`[Twitter OAuth] Consumer key: ${apiKey.slice(0, 8)}...${apiKey.slice(-4)}`);
+  console.log(`[Twitter OAuth] Access token: ${accessToken.slice(0, 8)}...${accessToken.slice(-4)}`);
+
   return authHeader;
 }
 
@@ -135,19 +106,11 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
     return { credentialsConfigured: false, missing: credCheck.missing };
   }
 
-  let config: TwitterConfig;
-  try {
-    config = getConfig();
-  } catch (err) {
-    return { credentialsConfigured: false, missing: [], error: String(err) };
-  }
-
-  // Log key lengths to detect whitespace/corruption without exposing secrets
   const keyLengths = {
-    apiKey: config.apiKey.length,
-    apiSecret: config.apiSecret.length,
-    accessToken: config.accessToken.length,
-    accessSecret: config.accessSecret.length,
+    apiKey: (process.env.TWITTER_API_KEY || '').trim().length,
+    apiSecret: (process.env.TWITTER_API_SECRET || '').trim().length,
+    accessToken: (process.env.TWITTER_ACCESS_TOKEN || '').trim().length,
+    accessSecret: (process.env.TWITTER_ACCESS_SECRET || '').trim().length,
   };
   console.log('[Twitter Test] Key lengths:', keyLengths);
 
@@ -156,7 +119,13 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
   // On Free tier, this will return 401/403 even with valid credentials.
   // The only Free tier endpoint is POST /2/tweets.
   const url = 'https://api.twitter.com/2/users/me';
-  const authorization = buildAuthorizationHeader('GET', url, config);
+
+  let authorization: string;
+  try {
+    authorization = buildOAuthHeader('GET', url);
+  } catch (err) {
+    return { credentialsConfigured: false, missing: [], error: String(err) };
+  }
 
   try {
     const response = await fetch(url, {
@@ -219,16 +188,15 @@ export function checkTwitterCredentials(): { configured: boolean; missing: strin
 }
 
 export async function postTweet(text: string): Promise<TweetResult> {
-  let config: TwitterConfig;
+  const url = 'https://api.twitter.com/2/tweets';
+
+  let authorization: string;
   try {
-    config = getConfig();
+    authorization = buildOAuthHeader('POST', url);
   } catch (err) {
     console.error('[Twitter] Config error:', String(err));
     return { success: false, error: String(err) };
   }
-
-  const url = 'https://api.twitter.com/2/tweets';
-  const authorization = buildAuthorizationHeader('POST', url, config);
 
   console.log(`[Twitter] Posting tweet (${text.length} chars) to ${url}`);
 
