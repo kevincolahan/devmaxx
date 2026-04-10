@@ -378,3 +378,31 @@ contentRouter.post('/post-to-instagram', async (req, res) => {
     res.status(500).json({ error: 'Failed to post to Instagram', details: String(err) });
   }
 });
+
+// ─── Cleanup test game content ──────────────────────────────
+
+contentRouter.post('/cleanup-test-content', async (_req, res) => {
+  const testPatterns = [
+    "DevmaxxHQ's Place",
+    'DevmaxxHQ',
+    'Silent Storm Protocol',
+    'Innovation Lab',
+    'Mystery Genre',
+  ];
+
+  let totalDeleted = 0;
+  const details: Array<{ pattern: string; count: number }> = [];
+
+  for (const pattern of testPatterns) {
+    const result = await db.contentPiece.deleteMany({
+      where: {
+        content: { contains: pattern },
+      },
+    });
+    details.push({ pattern, count: result.count });
+    totalDeleted += result.count;
+  }
+
+  console.log(`[cleanup] Deleted ${totalDeleted} test content pieces:`, details);
+  res.json({ success: true, totalDeleted, details });
+});
