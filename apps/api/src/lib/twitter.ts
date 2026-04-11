@@ -1,98 +1,81 @@
-// ─── Twitter API v2 — OAuth 2.0 User Context ───────────────
-//
-// Uses OAuth 2.0 user access token (with tweet.write scope) for posting.
-// Falls back to OAuth 1.0a if TWITTER_OAUTH2_ACCESS_TOKEN is not set.
-//
-// To get an OAuth 2.0 user access token:
-// 1. Go to developer.twitter.com → your app → User authentication settings
-// 2. Enable OAuth 2.0 with Type: Web App, Confidential client
-// 3. Set callback URL (e.g. https://devmaxx.app/api/auth/twitter/callback)
-// 4. Use the OAuth 2.0 Authorization Code Flow with PKCE to get a user token
-//    with scopes: tweet.read, tweet.write, users.read
-// 5. Store the access token as TWITTER_OAUTH2_ACCESS_TOKEN in Railway
-
 import { createHmac, randomBytes } from 'crypto';
 
-// ─── OAuth 1.0a helpers (kept as fallback) ──────────────────
+// ─── Twitter API v2 — OAuth 1.0a Signed Requests ────────────
+//
+// This implementation matches the working Vercel route at
+// apps/web/app/api/social/post-tweet/route.ts exactly.
 
-function encode(str: string): string {
+function percentEncode(str: string): string {
   return encodeURIComponent(str)
     .replace(/!/g, '%21')
+    .replace(/\*/g, '%2A')
     .replace(/'/g, '%27')
     .replace(/\(/g, '%28')
-    .replace(/\)/g, '%29')
-    .replace(/\*/g, '%2A');
+    .replace(/\)/g, '%29');
 }
 
-function buildOAuth1Header(method: string, url: string): string {
+function generateOAuthSignature(
+  method: string,
+  url: string,
+  params: Record<string, string>,
+  apiSecret: string,
+  accessSecret: string
+): string {
+  const sortedParams = Object.keys(params)
+    .sort()
+    .map((key) => `${percentEncode(key)}=${percentEncode(params[key])}`)
+    .join('&');
+
+  const signatureBase = [
+    method.toUpperCase(),
+    percentEncode(url),
+    percentEncode(sortedParams),
+  ].join('&');
+
+  const signingKey = `${percentEncode(apiSecret)}&${percentEncode(accessSecret)}`;
+
+  return createHmac('sha1', signingKey)
+    .update(signatureBase)
+    .digest('base64');
+}
+
+function buildAuthorizationHeader(
+  method: string,
+  url: string,
+  apiKey: string,
+  apiSecret: string,
+  accessToken: string,
+  accessSecret: string
+): string {
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key: apiKey,
+    oauth_nonce: randomBytes(32).toString('hex').slice(0, 32),
+    oauth_signature_method: 'HMAC-SHA1',
+    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
+    oauth_token: accessToken,
+    oauth_version: '1.0',
+  };
+
+  const signature = generateOAuthSignature(method, url, oauthParams, apiSecret, accessSecret);
+  oauthParams.oauth_signature = signature;
+
+  const headerParts = Object.keys(oauthParams)
+    .sort()
+    .map((key) => `${percentEncode(key)}="${percentEncode(oauthParams[key])}"`)
+    .join(', ');
+
+  return `OAuth ${headerParts}`;
+}
+
+// ─── Credential helpers ─────────────────────────────────────
+
+function getCredentials() {
   const apiKey = (process.env.TWITTER_API_KEY || '').trim();
   const apiSecret = (process.env.TWITTER_API_SECRET || '').trim();
   const accessToken = (process.env.TWITTER_ACCESS_TOKEN || '').trim();
   const accessSecret = (process.env.TWITTER_ACCESS_SECRET || '').trim();
 
-  if (!apiKey || !apiSecret || !accessToken || !accessSecret) {
-    const missing = [
-      !apiKey && 'TWITTER_API_KEY',
-      !apiSecret && 'TWITTER_API_SECRET',
-      !accessToken && 'TWITTER_ACCESS_TOKEN',
-      !accessSecret && 'TWITTER_ACCESS_SECRET',
-    ].filter(Boolean);
-    throw new Error(`Missing Twitter OAuth 1.0a credentials: ${missing.join(', ')}`);
-  }
-
-  const timestamp = Math.floor(Date.now() / 1000).toString();
-  const nonce = randomBytes(16).toString('hex');
-
-  const oauthParams: Record<string, string> = {
-    oauth_consumer_key: apiKey,
-    oauth_nonce: nonce,
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: timestamp,
-    oauth_token: accessToken,
-    oauth_version: '1.0',
-  };
-
-  const sortedParams = Object.keys(oauthParams)
-    .sort()
-    .map((k) => `${encode(k)}=${encode(oauthParams[k])}`)
-    .join('&');
-
-  const baseString = [
-    method.toUpperCase(),
-    encode(url),
-    encode(sortedParams),
-  ].join('&');
-
-  const signingKey = `${encode(apiSecret)}&${encode(accessSecret)}`;
-
-  const signature = createHmac('sha1', signingKey)
-    .update(baseString)
-    .digest('base64');
-
-  oauthParams.oauth_signature = signature;
-
-  return (
-    'OAuth ' +
-    Object.keys(oauthParams)
-      .sort()
-      .map((k) => `${encode(k)}="${encode(oauthParams[k])}"`)
-      .join(', ')
-  );
-}
-
-// ─── Auth strategy selection ────────────────────────────────
-
-function getAuthHeader(method: string, url: string): { header: string; strategy: string } {
-  // Prefer OAuth 2.0 user access token if available
-  const oauth2Token = (process.env.TWITTER_OAUTH2_ACCESS_TOKEN || '').trim();
-  if (oauth2Token) {
-    console.log(`[Twitter] Using OAuth 2.0 user access token (${oauth2Token.length} chars)`);
-    return { header: `Bearer ${oauth2Token}`, strategy: 'oauth2_user' };
-  }
-
-  // Fall back to OAuth 1.0a
-  console.log('[Twitter] Using OAuth 1.0a (no TWITTER_OAUTH2_ACCESS_TOKEN set)');
-  return { header: buildOAuth1Header(method, url), strategy: 'oauth1' };
+  return { apiKey, apiSecret, accessToken, accessSecret };
 }
 
 // ─── Public API ──────────────────────────────────────────────
@@ -107,7 +90,6 @@ export interface TwitterTestResult {
   httpStatus?: number;
   rawResponse?: string;
   keyLengths?: Record<string, number>;
-  strategy?: string;
 }
 
 export async function testTwitterCredentials(): Promise<TwitterTestResult> {
@@ -116,22 +98,27 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
     return { credentialsConfigured: false, missing: credCheck.missing };
   }
 
+  const { apiKey, apiSecret, accessToken, accessSecret } = getCredentials();
+
   const keyLengths = {
-    apiKey: (process.env.TWITTER_API_KEY || '').trim().length,
-    apiSecret: (process.env.TWITTER_API_SECRET || '').trim().length,
-    accessToken: (process.env.TWITTER_ACCESS_TOKEN || '').trim().length,
-    accessSecret: (process.env.TWITTER_ACCESS_SECRET || '').trim().length,
-    oauth2AccessToken: (process.env.TWITTER_OAUTH2_ACCESS_TOKEN || '').trim().length,
+    apiKey: apiKey.length,
+    apiSecret: apiSecret.length,
+    accessToken: accessToken.length,
+    accessSecret: accessSecret.length,
   };
   console.log('[Twitter Test] Key lengths:', keyLengths);
 
+  // Use GET /2/users/me to verify OAuth
+  // Note: This endpoint requires Basic tier ($100/mo).
+  // On Free tier, this will return 401/403 even with valid credentials.
+  // The only Free tier endpoint is POST /2/tweets.
   const url = 'https://api.twitter.com/2/users/me';
-  const { header, strategy } = getAuthHeader('GET', url);
+  const authorization = buildAuthorizationHeader('GET', url, apiKey, apiSecret, accessToken, accessSecret);
 
   try {
     const response = await fetch(url, {
       method: 'GET',
-      headers: { Authorization: header },
+      headers: { Authorization: authorization },
     });
 
     const body = await response.text();
@@ -145,7 +132,6 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
         error: `Twitter API ${response.status}: ${body}`,
         rawResponse: body,
         keyLengths,
-        strategy,
       };
     }
 
@@ -159,7 +145,6 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
       userId: data.data?.id,
       username: data.data?.username,
       keyLengths,
-      strategy,
     };
   } catch (err) {
     return {
@@ -168,7 +153,6 @@ export async function testTwitterCredentials(): Promise<TwitterTestResult> {
       apiReachable: false,
       error: `Network error: ${String(err)}`,
       keyLengths,
-      strategy,
     };
   }
 }
@@ -181,34 +165,43 @@ export interface TweetResult {
 }
 
 export function checkTwitterCredentials(): { configured: boolean; missing: string[] } {
-  // Configured if either OAuth 2.0 token OR OAuth 1.0a credentials are present
-  const hasOAuth2 = !!(process.env.TWITTER_OAUTH2_ACCESS_TOKEN || '').trim();
-  if (hasOAuth2) {
-    return { configured: true, missing: [] };
-  }
+  const { apiKey, apiSecret, accessToken, accessSecret } = getCredentials();
 
   const missing = [
-    !process.env.TWITTER_API_KEY && 'TWITTER_API_KEY',
-    !process.env.TWITTER_API_SECRET && 'TWITTER_API_SECRET',
-    !process.env.TWITTER_ACCESS_TOKEN && 'TWITTER_ACCESS_TOKEN',
-    !process.env.TWITTER_ACCESS_SECRET && 'TWITTER_ACCESS_SECRET',
+    !apiKey && 'TWITTER_API_KEY',
+    !apiSecret && 'TWITTER_API_SECRET',
+    !accessToken && 'TWITTER_ACCESS_TOKEN',
+    !accessSecret && 'TWITTER_ACCESS_SECRET',
   ].filter(Boolean) as string[];
 
   return { configured: missing.length === 0, missing };
 }
 
 export async function postTweet(text: string): Promise<TweetResult> {
-  const url = 'https://api.twitter.com/2/tweets';
-  const { header, strategy } = getAuthHeader('POST', url);
+  const { apiKey, apiSecret, accessToken, accessSecret } = getCredentials();
 
-  console.log(`[Twitter] Posting tweet (${text.length} chars) via ${strategy}`);
+  if (!apiKey || !apiSecret || !accessToken || !accessSecret) {
+    const missing = [
+      !apiKey && 'TWITTER_API_KEY',
+      !apiSecret && 'TWITTER_API_SECRET',
+      !accessToken && 'TWITTER_ACCESS_TOKEN',
+      !accessSecret && 'TWITTER_ACCESS_SECRET',
+    ].filter(Boolean);
+    return { success: false, error: `Missing Twitter credentials: ${missing.join(', ')}` };
+  }
+
+  const url = 'https://api.twitter.com/2/tweets';
+  const authorization = buildAuthorizationHeader('POST', url, apiKey, apiSecret, accessToken, accessSecret);
+
+  console.log(`[Twitter] Posting tweet (${text.length} chars)`);
+  console.log(`[Twitter] Key lengths — apiKey: ${apiKey.length}, apiSecret: ${apiSecret.length}, accessToken: ${accessToken.length}, accessSecret: ${accessSecret.length}`);
 
   let response: Response;
   try {
     response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: header,
+        Authorization: authorization,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ text }),
@@ -220,11 +213,10 @@ export async function postTweet(text: string): Promise<TweetResult> {
 
   if (!response.ok) {
     const errorBody = await response.text();
-    console.error(`[Twitter] API error (${response.status}) via ${strategy}:`, errorBody);
-    console.error(`[Twitter] Response headers:`, Object.fromEntries(response.headers.entries()));
+    console.error(`[Twitter] API error (${response.status}):`, errorBody);
     return {
       success: false,
-      error: `Twitter API ${response.status} (${strategy}): ${errorBody}`,
+      error: `Twitter API ${response.status}: ${errorBody}`,
     };
   }
 
@@ -235,7 +227,7 @@ export async function postTweet(text: string): Promise<TweetResult> {
     return { success: false, error: `Twitter returned unexpected response: ${JSON.stringify(data)}` };
   }
 
-  console.log(`[Twitter] Success via ${strategy} — tweet ID: ${data.data.id}`);
+  console.log(`[Twitter] Success — tweet ID: ${data.data.id}`);
 
   return {
     success: true,
