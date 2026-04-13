@@ -71,9 +71,16 @@ function buildAuthorizationHeader(
 // ─── Route Handler ───────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const session = await auth();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Auth: accept session OR CRON_SECRET bearer token (for Railway cron → Vercel proxy)
+  const authHeader = req.headers.get('authorization') || '';
+  const cronSecret = (process.env.CRON_SECRET || '').trim();
+  const isCronAuth = cronSecret && authHeader === `Bearer ${cronSecret}`;
+
+  if (!isCronAuth) {
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
   }
 
   const { text, contentPieceId } = (await req.json()) as { text?: string; contentPieceId?: string };

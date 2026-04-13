@@ -442,37 +442,43 @@ contentRouter.post('/trigger-x', async (_req, res) => {
     return;
   }
 
-  // 3. Attempt to post
+  // 3. Attempt to post via Vercel (Railway IPs blocked by Twitter)
+  const vercelBase = process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'https://www.devmaxx.app';
+  const cronSecret = (process.env.CRON_SECRET || '').trim();
+
+  debug.vercelBase = vercelBase;
+  debug.cronSecretConfigured = !!cronSecret;
+
+  if (!cronSecret) {
+    res.json({ success: false, debug, error: 'CRON_SECRET not configured — cannot call Vercel' });
+    return;
+  }
+
   try {
-    console.log(`[trigger-x] Attempting to post piece ${piece.id}`);
-    const result = await postTweet(piece.content);
+    console.log(`[trigger-x] Posting piece ${piece.id} via Vercel: ${vercelBase}/api/social/post-tweet`);
 
-    debug.twitterApiResult = {
-      success: result.success,
-      tweetId: result.tweetId,
-      tweetUrl: result.tweetUrl,
-      error: result.error,
-    };
+    const vercelRes = await fetch(`${vercelBase}/api/social/post-tweet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ text: piece.content, contentPieceId: piece.id }),
+    });
 
-    if (result.success) {
-      await db.contentPiece.update({
-        where: { id: piece.id },
-        data: {
-          status: 'published',
-          publishedAt: new Date(),
-          performance: {
-            tweetId: result.tweetId,
-            tweetUrl: result.tweetUrl,
-            platform: 'x',
-            postedAt: new Date().toISOString(),
-            manualTrigger: true,
-          },
-        },
-      });
+    const vercelData = (await vercelRes.json()) as Record<string, unknown>;
+
+    debug.vercelStatus = vercelRes.status;
+    debug.vercelResponse = vercelData;
+
+    if (vercelRes.ok && vercelData.success) {
       debug.dbUpdated = true;
+      res.json({ success: true, debug });
+    } else {
+      res.json({ success: false, debug, error: vercelData.error ?? `Vercel returned ${vercelRes.status}` });
     }
-
-    res.json({ success: result.success, debug });
   } catch (err) {
     debug.error = String(err);
     console.error('[trigger-x] Error:', err);

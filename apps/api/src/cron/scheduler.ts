@@ -311,6 +311,50 @@ async function runNewsMonitor() {
   log('NewsMonitor', 'Complete');
 }
 
+// ─── Vercel Twitter Proxy (Railway IPs blocked by Twitter) ──
+
+const VERCEL_BASE = process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}`
+  : 'https://www.devmaxx.app';
+
+async function postTweetViaVercel(
+  text: string
+): Promise<{ success: boolean; postId?: string; postUrl?: string; tweetId?: string; tweetUrl?: string; error?: string }> {
+  const cronSecret = (process.env.CRON_SECRET || '').trim();
+  if (!cronSecret) {
+    log('SocialPoster', '[x] CRON_SECRET not set — cannot call Vercel');
+    return { success: false, error: 'CRON_SECRET not configured' };
+  }
+
+  const url = `${VERCEL_BASE}/api/social/post-tweet`;
+  log('SocialPoster', `[x] Posting via Vercel: ${url}`);
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${cronSecret}`,
+      },
+      body: JSON.stringify({ text }),
+    });
+
+    const data = (await res.json()) as Record<string, unknown>;
+
+    if (!res.ok) {
+      return { success: false, error: `Vercel ${res.status}: ${JSON.stringify(data)}` };
+    }
+
+    return {
+      success: true,
+      tweetId: data.tweetId as string | undefined,
+      tweetUrl: data.tweetUrl as string | undefined,
+    };
+  } catch (err) {
+    return { success: false, error: `Vercel fetch error: ${String(err)}` };
+  }
+}
+
 // ─── Social Poster (auto-post approved content, all platforms) ─
 
 async function postOnePiece(
@@ -392,8 +436,8 @@ async function runSocialPoster() {
 
   const results: Record<string, boolean> = {};
 
-  // 1. X/Twitter (highest priority)
-  results.x = await postOnePiece('x', postTweet);
+  // 1. X/Twitter (routed through Vercel — Railway IPs blocked by Twitter)
+  results.x = await postOnePiece('x', postTweetViaVercel);
 
   // 2. LinkedIn
   results.linkedin = await postOnePiece('linkedin', postToLinkedIn);
@@ -435,7 +479,7 @@ export function startScheduler() {
   cron.schedule('0 9 1 * *', guardedJob('MonetizationAdvisor', runMonetizationAdvisor), { timezone: 'UTC' });
 
   // SocialPoster — staggered daily auto-posting per platform
-  cron.schedule('0 10 * * *', guardedJob('SocialPoster:X', () => postOnePiece('x', postTweet).then(() => {})), { timezone: 'UTC' });
+  cron.schedule('0 10 * * *', guardedJob('SocialPoster:X', () => postOnePiece('x', postTweetViaVercel).then(() => {})), { timezone: 'UTC' });
   cron.schedule('0 11 * * *', guardedJob('SocialPoster:LinkedIn', () => postOnePiece('linkedin', postToLinkedIn).then(() => {})), { timezone: 'UTC' });
   cron.schedule('0 12 * * *', guardedJob('SocialPoster:Instagram', () => postOnePiece('instagram', createInstagramPost).then(() => {})), { timezone: 'UTC' });
 
