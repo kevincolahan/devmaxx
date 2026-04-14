@@ -557,6 +557,7 @@ N8N_WEBHOOK_URL=
 - **Creator Level System:** XP + 8-tier level system (Rookie Creator to Legendary Studio). XP awarded for game connections, agent runs, pricing tests, upgrades, referrals. `XPEvent` table logs all awards. `awardXP()` utility in `apps/api/src/lib/xp.ts`, client-side levels in `apps/web/lib/levels.ts`, XP API at `/api/xp`.
 - **Gamified Dashboard:** CreatorHud component replaces plain header — shows level badge, XP progress bar, stat chips. Agent Run Feed restyled as quest log with XP badges. Health Score Card shows HUD-style stat bars with trend indicators. Milestone toasts for first game, upgrades, etc.
 - **Quest-Style Onboarding:** QuestOnboarding component replaces old 2-step flow with quest progress bar, XP rewards per step, and locked/active/complete states.
+- **Interactive Landing Page:** Typewriter hero cycling 4 phrases, animated stat counters (count-up on scroll), agent cards with green pulsing "RUNNING" dot + hover lift, interactive game health demo with animated bars on scroll, cascade level tier animation, FAQ accordion with border glow, CTA pulse on idle, scroll progress bar, subtle animated grid background. All CSS-only animations in globals.css, respects prefers-reduced-motion.
 
 ---
 
