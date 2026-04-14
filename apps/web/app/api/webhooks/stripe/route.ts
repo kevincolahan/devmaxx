@@ -123,11 +123,12 @@ export async function POST(req: NextRequest) {
       const session = event.data.object as Stripe.Checkout.Session;
       const creatorId = session.metadata?.creatorId;
       const plan = session.metadata?.plan;
+      const billingPeriod = session.metadata?.billingPeriod || 'monthly';
 
       if (creatorId && plan) {
         await db.creator.update({
           where: { id: creatorId },
-          data: { plan },
+          data: { plan, billingPeriod },
         });
 
         // Process referral conversion
@@ -145,7 +146,7 @@ export async function POST(req: NextRequest) {
 
       await db.creator.updateMany({
         where: { stripeId: customerId },
-        data: { plan: 'free', autopilot: false },
+        data: { plan: 'free', autopilot: false, billingPeriod: 'monthly' },
       });
       break;
     }

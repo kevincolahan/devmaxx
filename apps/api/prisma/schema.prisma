@@ -63,6 +63,7 @@ model Creator {
   robloxApiKey         String?    @db.Text
   stripeId             String?
   plan                 String     @default("free")
+  billingPeriod        String     @default("monthly")
   autopilot            Boolean    @default(false)
   timezone             String     @default("UTC")
   referralCode         String?    @unique

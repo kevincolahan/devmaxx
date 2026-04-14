@@ -5,8 +5,9 @@ import { useState } from 'react';
 const tiers = [
   {
     name: 'Free',
-    price: '$0',
-    period: '/mo',
+    monthlyPrice: 0,
+    annualPrice: 0,
+    annualSavings: 0,
     games: '1 game',
     features: [
       'Weekly GrowthBrief',
@@ -19,8 +20,9 @@ const tiers = [
   },
   {
     name: 'Creator',
-    price: '$49',
-    period: '/mo',
+    monthlyPrice: 49,
+    annualPrice: 490,
+    annualSavings: 98,
     games: '2 games',
     features: [
       'All AI agents',
@@ -35,8 +37,9 @@ const tiers = [
   },
   {
     name: 'Pro',
-    price: '$99',
-    period: '/mo',
+    monthlyPrice: 99,
+    annualPrice: 990,
+    annualSavings: 198,
     games: '5 games',
     features: [
       'Everything in Creator',
@@ -51,8 +54,9 @@ const tiers = [
   },
   {
     name: 'Studio',
-    price: '$249',
-    period: '/mo',
+    monthlyPrice: 249,
+    annualPrice: 2490,
+    annualSavings: 498,
     games: 'Unlimited games',
     features: [
       'Everything in Pro',
@@ -70,6 +74,7 @@ const tiers = [
 export default function PricingPage() {
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [annual, setAnnual] = useState(false);
 
   async function handleCheckout(plan: string) {
     if (plan === 'free') {
@@ -84,7 +89,10 @@ export default function PricingPage() {
       const res = await fetch('/api/stripe/checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ plan }),
+        body: JSON.stringify({
+          plan,
+          billingPeriod: annual ? 'annual' : 'monthly',
+        }),
       });
 
       const data = await res.json();
@@ -116,52 +124,109 @@ export default function PricingPage() {
         </p>
       </div>
 
+      {/* Annual / Monthly toggle */}
+      <div className="mt-8 flex items-center justify-center gap-3">
+        <span className={`text-sm font-medium ${!annual ? 'text-white' : 'text-gray-500'}`}>
+          Monthly
+        </span>
+        <button
+          type="button"
+          onClick={() => setAnnual(!annual)}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition ${
+            annual ? 'bg-indigo-600' : 'bg-gray-700'
+          }`}
+          role="switch"
+          aria-checked={annual}
+        >
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-white shadow transition ${
+              annual ? 'translate-x-5' : 'translate-x-0'
+            }`}
+          />
+        </button>
+        <span className={`text-sm font-medium ${annual ? 'text-white' : 'text-gray-500'}`}>
+          Annual
+        </span>
+        {annual && (
+          <span className="ml-1 rounded-full bg-emerald-500/10 px-2.5 py-0.5 text-xs font-semibold text-emerald-400">
+            2 months free
+          </span>
+        )}
+      </div>
+
       {error && (
         <div className="mx-auto mt-6 max-w-md rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-center text-sm text-red-400">
           {error}
         </div>
       )}
 
-      <div className="mt-12 grid gap-6 md:grid-cols-4">
-        {tiers.map((tier) => (
-          <div
-            key={tier.name}
-            className={`rounded-xl border p-6 ${
-              tier.highlighted
-                ? 'border-brand-500 bg-gray-900'
-                : 'border-gray-800 bg-gray-900/50'
-            }`}
-          >
-            <h2 className="text-lg font-semibold">{tier.name}</h2>
-            <div className="mt-4">
-              <span className="text-4xl font-bold">{tier.price}</span>
-              <span className="text-gray-400">{tier.period}</span>
-            </div>
-            <p className="mt-2 text-sm text-gray-400">{tier.games}</p>
-            <ul className="mt-6 space-y-3">
-              {tier.features.map((feature) => (
-                <li
-                  key={feature}
-                  className="flex items-start text-sm text-gray-300"
-                >
-                  <span className="mr-2 text-brand-400">&#10003;</span>
-                  {feature}
-                </li>
-              ))}
-            </ul>
-            <button
-              onClick={() => handleCheckout(tier.plan)}
-              disabled={loading === tier.plan}
-              className={`mt-8 w-full rounded-lg py-2.5 font-semibold transition ${
+      <div className="mt-10 grid gap-6 md:grid-cols-4">
+        {tiers.map((tier) => {
+          const displayPrice = annual
+            ? Math.round(tier.annualPrice / 12)
+            : tier.monthlyPrice;
+
+          return (
+            <div
+              key={tier.name}
+              className={`relative rounded-xl border p-6 ${
                 tier.highlighted
-                  ? 'bg-brand-600 text-white hover:bg-brand-500'
-                  : 'border border-gray-700 text-gray-300 hover:border-gray-500'
-              } disabled:opacity-50`}
+                  ? 'border-brand-500 bg-gray-900 shadow-lg shadow-indigo-500/10'
+                  : 'border-gray-800 bg-gray-900/50'
+              }`}
             >
-              {loading === tier.plan ? 'Loading...' : tier.cta}
-            </button>
-          </div>
-        ))}
+              {tier.highlighted && (
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-indigo-600 px-3 py-0.5 text-xs font-semibold text-white">
+                  Most Popular
+                </div>
+              )}
+              <h2 className="text-lg font-semibold">{tier.name}</h2>
+              <div className="mt-4">
+                {displayPrice === 0 ? (
+                  <span className="text-4xl font-bold">Free</span>
+                ) : (
+                  <>
+                    <span className="text-4xl font-bold">${displayPrice}</span>
+                    <span className="text-gray-400">/mo</span>
+                  </>
+                )}
+              </div>
+              {annual && tier.annualPrice > 0 && (
+                <div className="mt-1 space-y-0.5">
+                  <p className="text-xs text-gray-500">
+                    ${tier.annualPrice}/year billed annually
+                  </p>
+                  <p className="text-xs font-semibold text-emerald-400">
+                    Save ${tier.annualSavings}/year
+                  </p>
+                </div>
+              )}
+              <p className="mt-2 text-sm text-gray-400">{tier.games}</p>
+              <ul className="mt-6 space-y-3">
+                {tier.features.map((feature) => (
+                  <li
+                    key={feature}
+                    className="flex items-start text-sm text-gray-300"
+                  >
+                    <span className="mr-2 text-brand-400">&#10003;</span>
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => handleCheckout(tier.plan)}
+                disabled={loading === tier.plan}
+                className={`mt-8 w-full rounded-lg py-2.5 font-semibold transition ${
+                  tier.highlighted
+                    ? 'bg-brand-600 text-white hover:bg-brand-500'
+                    : 'border border-gray-700 text-gray-300 hover:border-gray-500'
+                } disabled:opacity-50`}
+              >
+                {loading === tier.plan ? 'Loading...' : tier.cta}
+              </button>
+            </div>
+          );
+        })}
       </div>
     </main>
   );

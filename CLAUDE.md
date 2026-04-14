@@ -139,7 +139,8 @@ devmaxx/
 │       │   │   └── onboarding.ts      # Onboarding email trigger endpoint
 │       │   ├── scripts/        # One-off scripts
 │       │   │   ├── seed-content.ts      # Seed ContentPiece table
-│       │   │   └── railway-restart.ts   # Emergency Railway service restart via GraphQL
+│       │   │   ├── railway-restart.ts   # Emergency Railway service restart via GraphQL
+│       │   │   └── create-annual-prices.ts  # One-time: create annual Stripe prices
 │       │   └── marketing/      # Marketing agents
 │       └── infra/
 │           └── n8n/            # n8n workflow JSON exports
@@ -163,8 +164,9 @@ model Creator {
   email        String   @unique
   robloxUserId String?
   stripeId     String?
-  plan         String   @default("free") // free|creator|pro|studio
-  autopilot    Boolean  @default(false)
+  plan           String   @default("free") // free|creator|pro|studio
+  billingPeriod  String   @default("monthly") // monthly|annual
+  autopilot      Boolean  @default(false)
   timezone     String   @default("UTC")
   games        Game[]
   agentRuns    AgentRun[]
@@ -441,6 +443,9 @@ STRIPE_PRICE_FREE=
 STRIPE_PRICE_CREATOR=
 STRIPE_PRICE_PRO=
 STRIPE_PRICE_STUDIO=
+STRIPE_PRICE_CREATOR_ANNUAL=
+STRIPE_PRICE_PRO_ANNUAL=
+STRIPE_PRICE_STUDIO_ANNUAL=
 
 # Email
 RESEND_API_KEY=
@@ -487,12 +492,12 @@ N8N_WEBHOOK_URL=
 
 ## Pricing Tiers
 
-| Tier | Price | Games | Key Feature |
-|---|---|---|---|
-| Free | $0/mo | 1 | Weekly GrowthBrief only, no action agents |
-| Creator | $49/mo | 2 | All agents, manual approval mode |
-| Pro | $99/mo | 5 | Autopilot mode, competitor tracking |
-| Studio | $249/mo | Unlimited | White-label reports, 3 team seats |
+| Tier | Monthly | Annual | Games | Key Feature |
+|---|---|---|---|---|
+| Free | $0/mo | $0/yr | 1 | Weekly GrowthBrief only, no action agents |
+| Creator | $49/mo | $490/yr (save $98) | 2 | All agents, manual approval mode |
+| Pro | $99/mo | $990/yr (save $198) | 5 | Autopilot mode, competitor tracking |
+| Studio | $249/mo | $2,490/yr (save $498) | Unlimited | White-label reports, 3 team seats |
 
 ---
 
@@ -533,6 +538,7 @@ N8N_WEBHOOK_URL=
 - **Autopilot Toggle Fix:** Proper plan gating, error handling, and upgrade button
 - **Stripe Checkout Fixes:** Handle missing customer, fallback to email, proper error handling
 - **Landing Page Overhaul:** High-conversion layout — hero with social proof bar, problem/solution sections, 6 agent cards, social proof stats, pricing with annual toggle (save 2 months), FAQ, footer with LinkedIn. Page is now `'use client'` for toggle state.
+- **Annual Billing:** Stripe annual prices (2 months free), billing toggle on pricing page + landing page, `billingPeriod` field on Creator model, checkout route accepts `billingPeriod` param. Run `create-annual-prices.ts` script to create Stripe prices, then set `STRIPE_PRICE_*_ANNUAL` env vars.
 
 ---
 
