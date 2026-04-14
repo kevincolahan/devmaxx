@@ -22,3 +22,33 @@ export async function GET() {
 
   return NextResponse.json({ prospects });
 }
+
+export async function PATCH(request: Request) {
+  const session = await auth();
+  if (!session?.user?.email) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (session.user.email !== 'kevin@devmaxx.app') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const { id, outreachStatus } = body;
+
+  if (!id || !outreachStatus) {
+    return NextResponse.json({ error: 'Missing id or outreachStatus' }, { status: 400 });
+  }
+
+  const allowed = ['pending', 'queued', 'contacted', 'replied'];
+  if (!allowed.includes(outreachStatus)) {
+    return NextResponse.json({ error: 'Invalid outreachStatus' }, { status: 400 });
+  }
+
+  const updated = await db.prospectList.update({
+    where: { id },
+    data: { outreachStatus },
+  });
+
+  return NextResponse.json({ prospect: updated });
+}

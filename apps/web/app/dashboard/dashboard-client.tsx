@@ -25,7 +25,7 @@ import { SentimentAnalysis } from '@/components/sentiment-analysis';
 import { ReferralPanel } from '@/components/referral-panel';
 import { UpgradePrompt } from '@/components/upgrade-prompt';
 import { MilestoneToast } from '@/components/milestone-toast';
-import { ProspectsPanel } from '@/components/prospects-panel';
+import { ProspectsTab } from '@/components/prospects-tab';
 
 interface Snapshot {
   date: string;
@@ -553,7 +553,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
       {activeTab === 'prospects' && (
         <div className="mt-8">
-          <ProspectsPanel />
+          <ProspectsTab />
         </div>
       )}
     </main>
