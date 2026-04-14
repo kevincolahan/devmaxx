@@ -532,6 +532,7 @@ N8N_WEBHOOK_URL=
 - **Content Seed Route:** POST `/api/content/generate-seed` for bulk content generation
 - **Autopilot Toggle Fix:** Proper plan gating, error handling, and upgrade button
 - **Stripe Checkout Fixes:** Handle missing customer, fallback to email, proper error handling
+- **Landing Page Overhaul:** High-conversion layout — hero with social proof bar, problem/solution sections, 6 agent cards, social proof stats, pricing with annual toggle (save 2 months), FAQ, footer with LinkedIn. Page is now `'use client'` for toggle state.
 
 ---
 
