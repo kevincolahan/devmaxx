@@ -22,6 +22,7 @@ import { RevenueForecastCard } from '@/components/revenue-forecast-card';
 import { EventImpactTimeline } from '@/components/event-impact-timeline';
 import { SentimentAnalysis } from '@/components/sentiment-analysis';
 import { ReferralPanel } from '@/components/referral-panel';
+import { UpgradePrompt } from '@/components/upgrade-prompt';
 
 interface Snapshot {
   date: string;
@@ -341,7 +342,19 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
           )}
           {/* Revenue Forecast + Event Impact */}
           <div className="mt-8 grid gap-6 md:grid-cols-2">
-            <RevenueForecastCard forecast={forecast as any} />
+            {creator?.plan === 'free' ? (
+              <UpgradePrompt
+                feature="Revenue Forecasting"
+                benefit="See your full revenue range with upside, downside, and seasonal projections."
+                requiredPlan="creator"
+                currentPlan={creator.plan}
+                variant="blur"
+              >
+                <RevenueForecastCard forecast={forecast as any} />
+              </UpgradePrompt>
+            ) : (
+              <RevenueForecastCard forecast={forecast as any} />
+            )}
             <EventImpactTimeline events={events} />
           </div>
 
@@ -372,6 +385,17 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
       {activeTab === 'commands' && creator && (
         <div className="mt-8">
+          {creator.plan === 'free' && (
+            <div className="mb-4">
+              <UpgradePrompt
+                feature="Game Commands"
+                benefit="Execute game commands automatically — run sales, update prices, generate content with plain English."
+                requiredPlan="creator"
+                currentPlan={creator.plan}
+                variant="banner"
+              />
+            </div>
+          )}
           <CommandConsole creatorId={creator.id} gameId={games[0]?.id} />
         </div>
       )}
@@ -384,7 +408,19 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
       {activeTab === 'pricing' && (
         <div className="mt-8 space-y-6">
-          <PricingTestsTable tests={allPriceTests} creatorId={creator?.id} gameId={games[0]?.id} />
+          {creator?.plan === 'free' ? (
+            <UpgradePrompt
+              feature="Pricing Optimization"
+              benefit="Your pricing agent found opportunities — upgrade to see and execute them automatically."
+              requiredPlan="creator"
+              currentPlan={creator.plan}
+              variant="blur"
+            >
+              <PricingTestsTable tests={allPriceTests} creatorId={creator?.id} gameId={games[0]?.id} />
+            </UpgradePrompt>
+          ) : (
+            <PricingTestsTable tests={allPriceTests} creatorId={creator?.id} gameId={games[0]?.id} />
+          )}
         </div>
       )}
 
@@ -403,7 +439,19 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
       {activeTab === 'mentions' && (
         <div className="mt-8 space-y-6">
-          <MentionsFeed mentions={mentions} />
+          {creator?.plan === 'free' ? (
+            <UpgradePrompt
+              feature="AI Mention Responses"
+              benefit="Auto-respond to mentions with AI-drafted replies. Never miss an opportunity to engage."
+              requiredPlan="creator"
+              currentPlan={creator.plan}
+              variant="blur"
+            >
+              <MentionsFeed mentions={mentions} />
+            </UpgradePrompt>
+          ) : (
+            <MentionsFeed mentions={mentions} />
+          )}
           <div className="mt-8">
             <h2 className="mb-4 text-lg font-semibold text-white">Outreach</h2>
             <XOutreachFeed />
@@ -426,17 +474,45 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
       {activeTab === 'brief' && (
         <div className="mt-8">
-          <GrowthBriefPreview
-            brief={lastBrief?.data as any}
-            sentAt={lastBrief?.sentAt ?? null}
-            creatorId={creator?.id}
-            gameId={games[0]?.id}
-          />
+          {creator?.plan === 'free' ? (
+            <UpgradePrompt
+              feature="Full Growth Brief"
+              benefit="Read your complete weekly business brief with actionable recommendations, revenue analysis, and growth opportunities."
+              requiredPlan="creator"
+              currentPlan={creator.plan}
+              variant="blur"
+              urgency="Your competitors are reading theirs every Sunday."
+            >
+              <GrowthBriefPreview
+                brief={lastBrief?.data as any}
+                sentAt={lastBrief?.sentAt ?? null}
+                creatorId={creator?.id}
+                gameId={games[0]?.id}
+              />
+            </UpgradePrompt>
+          ) : (
+            <GrowthBriefPreview
+              brief={lastBrief?.data as any}
+              sentAt={lastBrief?.sentAt ?? null}
+              creatorId={creator?.id}
+              gameId={games[0]?.id}
+            />
+          )}
         </div>
       )}
 
       {activeTab === 'recommendations' && (
         <div className="mt-8 space-y-6">
+          {creator?.plan === 'free' && (
+            <UpgradePrompt
+              feature="One-Click Actions"
+              benefit="Execute agent recommendations with a single click. Pricing changes, content updates, and more — all automated."
+              requiredPlan="creator"
+              currentPlan={creator.plan}
+              variant="inline"
+              urgency="Creators using one-click actions save 5+ hours per week."
+            />
+          )}
           <RecommendationsPanel recommendations={recommendations} creatorId={creator?.id ?? ''} gameId={games[0]?.id} />
         </div>
       )}
