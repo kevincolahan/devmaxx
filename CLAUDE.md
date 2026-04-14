@@ -141,6 +141,8 @@ devmaxx/
 │       │   │   ├── seed-content.ts      # Seed ContentPiece table
 │       │   │   ├── railway-restart.ts   # Emergency Railway service restart via GraphQL
 │       │   │   └── create-annual-prices.ts  # One-time: create annual Stripe prices
+│       │   ├── lib/
+│       │   │   └── xp.ts              # awardXP() — server-side XP utility
 │       │   └── marketing/      # Marketing agents
 │       └── infra/
 │           └── n8n/            # n8n workflow JSON exports
@@ -167,9 +169,13 @@ model Creator {
   plan           String   @default("free") // free|creator|pro|studio
   billingPeriod  String   @default("monthly") // monthly|annual
   autopilot      Boolean  @default(false)
+  xp             Int      @default(0)
+  level          Int      @default(1)
+  levelTitle     String   @default("Rookie Creator")
   timezone     String   @default("UTC")
   games        Game[]
   agentRuns    AgentRun[]
+  xpEvents     XPEvent[]
   createdAt    DateTime @default(now())
 }
 
@@ -267,6 +273,15 @@ model AgentRun {
   status      String   @default("success") // success|failed|escalated
   createdAt   DateTime @default(now())
   creator     Creator  @relation(fields: [creatorId], references: [id])
+}
+
+model XPEvent {
+  id        String   @id @default(cuid())
+  creatorId String
+  event     String   // connect_game|first_agent_run|agent_run|first_pricing_test|etc.
+  xpAwarded Int
+  createdAt DateTime @default(now())
+  creator   Creator  @relation(...)
 }
 
 model CompetitorSnapshot {
@@ -539,6 +554,9 @@ N8N_WEBHOOK_URL=
 - **Stripe Checkout Fixes:** Handle missing customer, fallback to email, proper error handling
 - **Landing Page Overhaul:** High-conversion layout — hero with social proof bar, problem/solution sections, 6 agent cards, social proof stats, pricing with annual toggle (save 2 months), FAQ, footer with LinkedIn. Page is now `'use client'` for toggle state.
 - **Annual Billing:** Stripe annual prices (2 months free), billing toggle on pricing page + landing page, `billingPeriod` field on Creator model, checkout route accepts `billingPeriod` param. Run `create-annual-prices.ts` script to create Stripe prices, then set `STRIPE_PRICE_*_ANNUAL` env vars.
+- **Creator Level System:** XP + 8-tier level system (Rookie Creator to Legendary Studio). XP awarded for game connections, agent runs, pricing tests, upgrades, referrals. `XPEvent` table logs all awards. `awardXP()` utility in `apps/api/src/lib/xp.ts`, client-side levels in `apps/web/lib/levels.ts`, XP API at `/api/xp`.
+- **Gamified Dashboard:** CreatorHud component replaces plain header — shows level badge, XP progress bar, stat chips. Agent Run Feed restyled as quest log with XP badges. Health Score Card shows HUD-style stat bars with trend indicators. Milestone toasts for first game, upgrades, etc.
+- **Quest-Style Onboarding:** QuestOnboarding component replaces old 2-step flow with quest progress bar, XP rewards per step, and locked/active/complete states.
 
 ---
 

@@ -1,7 +1,7 @@
 import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/db';
-import { OnboardingClient } from './onboarding-client';
+import { QuestOnboarding } from '@/components/quest-onboarding';
 
 export default async function OnboardingPage() {
   const session = await auth();
@@ -19,7 +19,7 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <OnboardingClient
+    <QuestOnboarding
       hasRobloxOAuth={!!creator?.robloxUserId}
       robloxUsername={creator?.robloxUsername ?? null}
       robloxDisplayName={creator?.robloxDisplayName ?? null}

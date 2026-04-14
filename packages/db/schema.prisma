@@ -66,11 +66,15 @@ model Creator {
   billingPeriod        String     @default("monthly")
   autopilot            Boolean    @default(false)
   timezone             String     @default("UTC")
+  xp                   Int        @default(0)
+  level                Int        @default(1)
+  levelTitle           String     @default("Rookie Creator")
   referralCode         String?    @unique
   referredBy           String?
   referralCredits      Int        @default(0)
   games                Game[]
   agentRuns            AgentRun[]
+  xpEvents             XPEvent[]
   createdAt            DateTime   @default(now())
 }
 
@@ -296,6 +300,15 @@ model Referral {
   convertedAt     DateTime?
   creditedAt      DateTime?
   createdAt       DateTime  @default(now())
+}
+
+model XPEvent {
+  id        String   @id @default(cuid())
+  creatorId String
+  event     String
+  xpAwarded Int
+  createdAt DateTime @default(now())
+  creator   Creator  @relation(fields: [creatorId], references: [id])
 }
 
 model KeyValue {

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { CreatorHud } from '@/components/creator-hud';
 import { HealthScoreCard } from '@/components/health-score-card';
 import { DauChart } from '@/components/dau-chart';
 import { AgentRunFeed } from '@/components/agent-run-feed';
@@ -23,6 +24,7 @@ import { EventImpactTimeline } from '@/components/event-impact-timeline';
 import { SentimentAnalysis } from '@/components/sentiment-analysis';
 import { ReferralPanel } from '@/components/referral-panel';
 import { UpgradePrompt } from '@/components/upgrade-prompt';
+import { MilestoneToast } from '@/components/milestone-toast';
 
 interface Snapshot {
   date: string;
@@ -130,6 +132,9 @@ interface DashboardData {
     robloxUsername: string | null;
     robloxDisplayName: string | null;
     hasApiKey: boolean;
+    xp: number;
+    level: number;
+    levelTitle: string;
   } | null;
   games: Game[];
   recentRuns: AgentRun[];
@@ -209,14 +214,34 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const searchParams = useSearchParams();
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false);
+  const [milestone, setMilestone] = useState<{
+    milestone: string;
+    description: string;
+    xp: number;
+    levelUp?: { from: number; to: number } | null;
+  } | null>(null);
 
   useEffect(() => {
     if (searchParams.get('upgraded') === 'true') {
       setShowUpgradeMessage(true);
+      const plan = creator?.plan ?? 'creator';
+      const xp = plan === 'pro' ? 2000 : 1000;
+      setMilestone({
+        milestone: `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan Activated!`,
+        description: 'All agents are now running on your games.',
+        xp,
+      });
       const timer = setTimeout(() => setShowUpgradeMessage(false), 8000);
       return () => clearTimeout(timer);
     }
-  }, [searchParams]);
+    if (searchParams.get('roblox') === 'connected') {
+      setMilestone({
+        milestone: 'First Game Connected!',
+        description: 'Your agents can now access your game data.',
+        xp: 500,
+      });
+    }
+  }, [searchParams, creator?.plan]);
 
   const allPriceTests = games.flatMap((g) => g.priceTests);
   const allTickets = games.flatMap((g) => g.tickets);
@@ -239,51 +264,46 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
   return (
     <main className="mx-auto max-w-6xl px-4 py-12">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="mt-1 text-gray-400">Welcome back, {userEmail}</p>
-        </div>
-        {creator && (
-          <span className="rounded-full border border-brand-500/30 bg-brand-500/10 px-3 py-1 text-sm font-medium text-brand-400">
-            {creator.plan.charAt(0).toUpperCase() + creator.plan.slice(1)} Plan
-          </span>
-        )}
-      </div>
+      {/* Milestone toast */}
+      {milestone && (
+        <MilestoneToast
+          milestone={milestone.milestone}
+          description={milestone.description}
+          xp={milestone.xp}
+          levelUp={milestone.levelUp}
+          onDismiss={() => setMilestone(null)}
+        />
+      )}
+
+      {/* Creator HUD — replaces old header + stats row */}
+      {creator && (
+        <CreatorHud
+          displayName={creator.robloxDisplayName}
+          email={creator.email}
+          xp={creator.xp}
+          level={creator.level}
+          levelTitle={creator.levelTitle}
+          plan={creator.plan}
+          totalGames={stats.totalGames}
+          totalRuns={stats.totalRuns}
+          totalRobuxImpact={stats.totalRobuxImpact}
+        />
+      )}
 
       {/* Upgrade success message */}
       {showUpgradeMessage && creator && (
-        <div className="mt-6 rounded-xl border border-green-500/30 bg-green-500/10 p-4 text-center">
-          <p className="text-lg font-semibold text-green-400">
+        <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
+          <p className="text-lg font-semibold text-emerald-400">
             Welcome to the {creator.plan.charAt(0).toUpperCase() + creator.plan.slice(1)} plan!
           </p>
-          <p className="mt-1 text-sm text-green-300/70">
+          <p className="mt-1 text-sm text-emerald-300/70">
             All agents are now active. Your games are being optimized.
           </p>
         </div>
       )}
 
-      {/* Stats row */}
-      <div className="mt-8 grid gap-6 md:grid-cols-3">
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-          <h2 className="text-sm font-medium text-gray-400">Games</h2>
-          <p className="mt-2 text-3xl font-bold">{stats.totalGames}</p>
-        </div>
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-          <h2 className="text-sm font-medium text-gray-400">Agent Runs</h2>
-          <p className="mt-2 text-3xl font-bold">{stats.totalRuns}</p>
-        </div>
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-          <h2 className="text-sm font-medium text-gray-400">Total Robux Impact</h2>
-          <p className={`mt-2 text-3xl font-bold ${stats.totalRobuxImpact >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {stats.totalRobuxImpact >= 0 ? '+' : ''}
-            {stats.totalRobuxImpact.toLocaleString()} R$
-          </p>
-        </div>
-      </div>
-
       {/* Autopilot + Connect Roblox */}
-      <div className="mt-8 grid gap-6 md:grid-cols-2">
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
         <ConnectRobloxButton
           isConnected={!!creator?.robloxUserId}
           robloxUserId={creator?.robloxUserId ?? null}
@@ -301,7 +321,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
       </div>
 
       {/* Tab navigation */}
-      <div className="mt-8 flex gap-1 overflow-x-auto rounded-lg border border-gray-800 bg-gray-900/50 p-1">
+      <div className="mt-6 flex gap-1 overflow-x-auto rounded-lg border border-gray-800 bg-gray-900/50 p-1">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -335,6 +355,8 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
                     gameName={game.name}
                     score={game.healthScore}
                     robloxGameId={game.robloxGameId}
+                    latestSnapshot={game.snapshots[0] ?? null}
+                    prevSnapshot={game.snapshots[1] ?? null}
                   />
                 ))}
               </div>

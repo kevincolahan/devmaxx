@@ -154,13 +154,13 @@ export default function Home() {
       {/* ── Hero ── */}
       <section className="mx-auto max-w-5xl px-4 pb-16 pt-20 text-center sm:pt-28">
         <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl lg:text-6xl">
-          Your Roblox game is a business.
+          Level up your Roblox game.
           <br />
-          <span className="text-indigo-400">Run it like one.</span>
+          <span className="text-indigo-400">AI agents handle the business layer.</span>
         </h1>
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-gray-400">
-          AI agents handle pricing optimization, player support, competitor tracking, and weekly
-          business briefs — automatically.
+          Pricing optimization, player support, competitor tracking, and weekly business
+          briefs — running automatically so you can focus on building.
         </p>
 
         <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -274,7 +274,12 @@ export default function Home() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 transition group-hover:bg-indigo-500/20">
                   {agent.icon}
                 </div>
-                <h3 className="mt-4 font-semibold text-white">{agent.name}</h3>
+                <div className="mt-4 flex items-center justify-between">
+                  <h3 className="font-semibold text-white">{agent.name}</h3>
+                  <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-400">
+                    +50 XP/run
+                  </span>
+                </div>
                 <p className="mt-2 text-sm leading-relaxed text-gray-500">{agent.description}</p>
               </div>
             ))}
@@ -314,6 +319,35 @@ export default function Home() {
                 Try it now &rarr;
               </Link>
             </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── Creator Levels ── */}
+      <section className="px-4 py-16">
+        <div className="mx-auto max-w-3xl text-center">
+          <h2 className="text-2xl font-bold text-white sm:text-3xl">
+            Level up as you grow
+          </h2>
+          <p className="mt-4 text-gray-400">
+            Earn XP for every action — connecting games, running agents, optimizing prices.
+            Join creators at Level 5+ earning $2K+/month in DevEx.
+          </p>
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+            {[
+              { level: 1, title: 'Rookie Creator', color: 'border-gray-700 text-gray-400' },
+              { level: 3, title: 'Game Builder', color: 'border-indigo-500/40 text-indigo-400' },
+              { level: 5, title: 'DevEx Earner', color: 'border-emerald-500/40 text-emerald-400' },
+              { level: 8, title: 'Legendary Studio', color: 'border-yellow-500/40 text-yellow-400' },
+            ].map((l) => (
+              <div
+                key={l.level}
+                className={`flex items-center gap-2 rounded-full border px-4 py-1.5 text-sm font-medium ${l.color}`}
+              >
+                <span className="font-bold">Lv.{l.level}</span>
+                <span>{l.title}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
