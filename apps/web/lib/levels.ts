@@ -1,4 +1,10 @@
-export const LEVEL_THRESHOLDS = [
+export interface LevelThreshold {
+  level: number;
+  title: string;
+  xp: number;
+}
+
+export const LEVEL_THRESHOLDS: LevelThreshold[] = [
   { level: 1, title: 'Rookie Creator', xp: 0 },
   { level: 2, title: 'Rising Dev', xp: 500 },
   { level: 3, title: 'Game Builder', xp: 1_500 },
@@ -7,7 +13,7 @@ export const LEVEL_THRESHOLDS = [
   { level: 6, title: 'Top Creator', xp: 10_000 },
   { level: 7, title: 'Elite Developer', xp: 20_000 },
   { level: 8, title: 'Legendary Studio', xp: 50_000 },
-] as const;
+];
 
 export function getLevelForXP(xp: number): {
   level: number;
