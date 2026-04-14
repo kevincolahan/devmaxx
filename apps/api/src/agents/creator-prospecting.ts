@@ -416,8 +416,14 @@ export async function runCreatorProspectingPipeline(
   }
 
   // Generate outreach for top 10 scoring prospects with Twitter handles
+  const contactedRecords = await db.prospectList.findMany({
+    where: { outreachStatus: { in: ['contacted', 'replied', 'queued'] } },
+    select: { robloxGameId: true },
+  });
+  const contactedIds = new Set(contactedRecords.map((r) => r.robloxGameId));
+
   const topProspects = enrichedProspects
-    .filter((p) => p.score >= 6 && p.socialLinks.twitter && p.outreachStatus !== 'contacted')
+    .filter((p) => p.score >= 6 && p.socialLinks.twitter && !contactedIds.has(p.robloxGameId))
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
 

@@ -15,7 +15,8 @@
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "node-cron": "^4.2.1",
-    "resend": "^4.0.1"
+    "resend": "^4.0.1",
+    "stripe": "^14.0.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
