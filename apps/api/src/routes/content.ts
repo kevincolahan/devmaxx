@@ -80,54 +80,80 @@ contentRouter.post('/generate-seed', async (_req, res) => {
   }
 
   const posts = [
+    // X posts — pure value (no product mention)
     {
       type: 'social_post', platform: 'x', status: 'approved',
-      content: 'Roblox paid $1B+ to creators last year. Most left 20-40% on the table with unoptimized pricing. Devmaxx fixes that automatically. devmaxx.app',
+      content: 'Most Roblox devs have never looked at their D7 retention. That one number tells you more about your game\'s future than DAU ever will.',
       creatorId: creator.id,
     },
     {
       type: 'social_post', platform: 'x', status: 'approved',
-      content: 'Your Roblox game is a business. Treat it like one. Devmaxx gives you a weekly brief — DAU trends, revenue analysis, pricing wins. Free to start. devmaxx.app',
+      content: 'The creators earning $5K+/month on Roblox all do one thing differently: they treat their game pass catalog like a product lineup, not an afterthought.',
       creatorId: creator.id,
     },
     {
       type: 'social_post', platform: 'x', status: 'approved',
-      content: 'The difference between $500/month and $5,000/month on Roblox is usually knowing which items to price higher. Devmaxx finds that automatically. devmaxx.app',
+      content: 'What\'s your D1 retention right now? Be honest. If you don\'t know the number off the top of your head, that\'s the problem.',
+      creatorId: creator.id,
+    },
+    // X posts — industry insight (soft mention)
+    {
+      type: 'social_post', platform: 'x', status: 'approved',
+      content: 'A/B tested item prices across a few games this week. Average revenue increase: 18%. Most creators set a price once and never touch it again.',
       creatorId: creator.id,
     },
     {
       type: 'social_post', platform: 'x', status: 'approved',
-      content: 'Games using A/B price testing earn 23% more DevEx on average. Devmaxx runs those tests automatically every week. Free tier available. devmaxx.app',
+      content: 'Roblox paid $1B+ to creators last year. The gap between the top 10% and everyone else isn\'t talent. It\'s whether they optimize or guess.',
+      creatorId: creator.id,
+    },
+    // X posts — product (with link)
+    {
+      type: 'social_post', platform: 'x', status: 'approved',
+      content: 'Built a free DevEx calculator. Plug in your DAU and retention, see what you should be earning vs what you are. devmaxx.app/devex-calculator',
       creatorId: creator.id,
     },
     {
       type: 'social_post', platform: 'x', status: 'approved',
-      content: 'Most Roblox devs check analytics once a month. Devmaxx checks daily and tells you exactly what changed and why. Free tier available. devmaxx.app',
+      content: 'I got tired of checking Roblox analytics manually so I built something that does it daily and tells me exactly what changed. devmaxx.app',
+      creatorId: creator.id,
+    },
+    // X posts — engagement
+    {
+      type: 'social_post', platform: 'x', status: 'approved',
+      content: 'Hot take: DAU is a vanity metric. A game with 500 DAU and 40% D7 retention will outperform a game with 5000 DAU and 8% retention every time.',
+      creatorId: creator.id,
+    },
+    {
+      type: 'social_post', platform: 'x', status: 'approved',
+      content: 'Unpopular opinion: most Roblox games are underpriced. Creators are scared to charge more because they\'ve never tested it.',
+      creatorId: creator.id,
+    },
+    {
+      type: 'social_post', platform: 'x', status: 'approved',
+      content: 'A creator went from $300/month to $2,100/month by doing one thing: raising the price of their most popular game pass by 40%. Nobody complained.',
+      creatorId: creator.id,
+    },
+    // LinkedIn posts
+    {
+      type: 'social_post', platform: 'linkedin', status: 'approved',
+      content: 'Nobody talks about this in the creator economy:\n\nRoblox creators are running businesses with real revenue, real customers, and real operational complexity — but zero business tooling.\n\nI spent the last few months talking to Roblox devs earning $1K-$20K/month through DevEx. Every single one of them was doing the same things manually: checking analytics once a week (if that), setting item prices based on gut feeling, responding to player support when they remembered, and having zero visibility into what competitors were doing.\n\nThese aren\'t hobbyists. These are operators running games with thousands of daily active users. They just don\'t have the tools that every other digital business takes for granted.\n\nSo I built it. Devmaxx runs AI agents that handle the business side automatically — daily metrics monitoring, A/B price testing, competitor tracking, weekly growth briefs. The creator focuses on making a great game. The agents handle the spreadsheet work.\n\nStill early, still building. But the response from creators who\'ve tried it has been wild. Turns out when you actually show someone their D7 retention for the first time, they immediately know what to fix.\n\ndevmaxx.app if you\'re curious.\n\nWhat business tools do you wish existed for the work you do?',
       creatorId: creator.id,
     },
     {
       type: 'social_post', platform: 'linkedin', status: 'approved',
-      content: 'The Roblox creator economy just hit a milestone most people missed.\n\nRoblox paid out over $1 billion to creators through DevEx last year — a 31% increase year over year. That\'s real money flowing to independent developers building games on a platform with 88 million daily active users.\n\nBut here\'s what the headline doesn\'t show: the vast majority of monetizing creators are leaving significant revenue on the table. Unoptimized item pricing, no A/B testing, manual analytics checks, and zero competitor awareness are the norm — not the exception.\n\nThe tools these creators need don\'t exist inside Roblox. They\'ve never existed. Until now.\n\nDevmaxx is an AI-powered business operations platform built specifically for Roblox creators. Autonomous agents handle pricing optimization, player support, competitor tracking, and weekly business briefs — automatically.\n\nCreators focus on building great games. Devmaxx handles the business.\n\nIf you know a Roblox developer who should be earning more from their game, send them to devmaxx.app.\n\nWhat do you think is the biggest gap in creator economy tooling right now?',
+      content: 'Hot take: the Roblox creator economy is bigger and more durable than most of the creator economy platforms people obsess over.\n\n$1B+ paid to creators annually. 88M daily active users. Games that generate consistent recurring revenue for years — not viral spikes that fade in a week.\n\nBut here\'s the thing nobody in tech is talking about: Roblox creators aren\'t "creators" in the influencer sense. They\'re game developers running businesses. They have DAU metrics, retention cohorts, item catalogs, and player support queues.\n\nThe entire creator economy conversation has been about content creators — YouTubers, TikTokers, newsletter writers. The game creator economy is a completely different animal. And it\'s significantly more underserved by tooling.\n\nI\'ve been building in this space for a few months now and the gap is staggering. Most creators are doing everything manually that could be automated. Price testing? Manual. Competitor tracking? Nonexistent. Analytics review? Monthly at best.\n\nThat\'s why I\'m building Devmaxx — AI agents that handle the business operations so creators can focus on making great games.\n\nAre you paying attention to the game creator economy? I think it\'s about to have its moment.',
       creatorId: creator.id,
     },
+    // Instagram posts
     {
-      type: 'social_post', platform: 'linkedin', status: 'approved',
-      content: 'Roblox is the most underrated creator economy platform in 2026. Here\'s why.\n\n88 million daily active users. $1 billion paid to creators annually. A 17-year-old platform that is somehow still growing faster than most social networks.\n\nAnd yet when you ask most people in tech about the creator economy, they mention YouTube, TikTok, Substack. Rarely Roblox.\n\nThe difference: Roblox creators don\'t have personal brands. They have games. And games are businesses — businesses with DAU metrics, retention cohorts, item catalogs, pricing strategies, and player support queues.\n\nThe creator economy conversation has focused entirely on content creators. The game creator economy is a completely different animal — and it\'s larger, more durable, and significantly more underserved by tooling.\n\nThat\'s exactly the gap Devmaxx is built to fill. AI-powered business operations for Roblox game creators — the operators who need a business layer on top of their creative layer.\n\ndevmaxx.app\n\nAre you paying attention to the game creator economy?',
-      creatorId: creator.id,
-    },
-    {
-      type: 'social_post', platform: 'linkedin', status: 'approved',
-      content: 'What separates top-earning Roblox creators from everyone else? After analyzing creator data, five behaviors stand out.\n\n1. They test prices constantly. Top creators run A/B tests on item pricing continuously. They know that a 25% price increase on a high-demand item can double revenue without affecting conversion. Most creators set a price once and never touch it.\n\n2. They watch competitors daily. Top creators know when a competing game surges or drops in player count — and they capitalize immediately with events or updates. Most creators have no visibility into their competitive landscape.\n\n3. They track D7 retention obsessively. Daily active users is a vanity metric. D7 retention — how many players return after 7 days — is the real signal. Top creators optimize for this above everything else.\n\n4. They respond to player support fast. Games with sub-24-hour support response times retain significantly more players. Top creators treat player support as a revenue function, not a nuisance.\n\n5. They ship on a schedule. Weekly updates, bi-weekly events, monthly major releases. Consistency drives algorithmic visibility on Roblox and keeps the player base engaged between sessions.\n\nDevmaxx automates all five of these for creators who don\'t have a full team behind them.\n\ndevmaxx.app',
+      type: 'social_post', platform: 'instagram', status: 'approved',
+      content: 'The gap between top Roblox earners and everyone else isn\'t talent. It\'s knowing your numbers. D7 retention > DAU. Every time. #RobloxDev #DevEx #GameDev',
       creatorId: creator.id,
     },
     {
       type: 'social_post', platform: 'instagram', status: 'approved',
-      content: 'Roblox paid $1B+ to creators last year. Most left 20-40% on the table. Devmaxx fixes that automatically. Free to start \u2192 devmaxx.app',
-      creatorId: creator.id,
-    },
-    {
-      type: 'social_post', platform: 'instagram', status: 'approved',
-      content: 'The difference between $500/month and $5,000/month on Roblox is knowing which items to price higher. Devmaxx finds that automatically. devmaxx.app',
+      content: 'Built a free tool to see how much your Roblox game should be earning. Plug in your DAU, see the gap. Link in bio. #RobloxCreator #DevEx #GameDev',
       creatorId: creator.id,
     },
   ];
