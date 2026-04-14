@@ -25,6 +25,7 @@ import { SentimentAnalysis } from '@/components/sentiment-analysis';
 import { ReferralPanel } from '@/components/referral-panel';
 import { UpgradePrompt } from '@/components/upgrade-prompt';
 import { MilestoneToast } from '@/components/milestone-toast';
+import { ProspectsPanel } from '@/components/prospects-panel';
 
 interface Snapshot {
   date: string;
@@ -207,7 +208,7 @@ interface DashboardClientProps {
   userEmail: string;
 }
 
-type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'referrals' | 'ask';
+type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'referrals' | 'ask' | 'prospects';
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
   const { creator, games, recentRuns, recommendations, contentPieces, mentions, sentiment, events, forecast, communityLastPost, communityPostHistory, lastBrief, referral, stats } = data;
@@ -260,6 +261,7 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
     { key: 'brief', label: 'Growth Brief' },
     { key: 'recommendations', label: 'Recs', count: recommendations.length },
     { key: 'referrals', label: 'Referrals', count: referral.referralCredits },
+    ...(creator?.email === 'kevin@devmaxx.app' ? [{ key: 'prospects' as const, label: 'Prospects' }] : []),
   ];
 
   return (
@@ -546,6 +548,12 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
             referralCredits={referral.referralCredits}
             referrals={referral.referrals}
           />
+        </div>
+      )}
+
+      {activeTab === 'prospects' && (
+        <div className="mt-8">
+          <ProspectsPanel />
         </div>
       )}
     </main>

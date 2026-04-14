@@ -275,6 +275,18 @@ model AgentRun {
   creator     Creator  @relation(fields: [creatorId], references: [id])
 }
 
+model ProspectList {
+  id                String   @id @default(cuid())
+  robloxGameId      String   @unique
+  gameName          String
+  creatorUsername    String
+  concurrentPlayers Int
+  prospectScore     Int      // 1-10
+  outreachStatus    String   // pending|queued|contacted|replied
+  signedUp          Boolean
+  scannedAt         DateTime
+}
+
 model XPEvent {
   id        String   @id @default(cuid())
   creatorId String
@@ -404,6 +416,7 @@ export abstract class BaseAgent {
 | OutcomeTrackingAgent | `agents/outcome-tracking.ts` | After agent actions | 2 |
 | CommunityOutreachAgent | `agents/community-outreach.ts` | Weekly — Reddit + DevForum | 3 |
 | CommandExecutorAgent | `agents/command-executor.ts` | On natural language command | 2 |
+| CreatorProspectingAgent | `agents/creator-prospecting.ts` | Daily cron 5am UTC | 2 |
 
 ---
 
@@ -558,6 +571,7 @@ N8N_WEBHOOK_URL=
 - **Gamified Dashboard:** CreatorHud component replaces plain header — shows level badge, XP progress bar, stat chips. Agent Run Feed restyled as quest log with XP badges. Health Score Card shows HUD-style stat bars with trend indicators. Milestone toasts for first game, upgrades, etc.
 - **Quest-Style Onboarding:** QuestOnboarding component replaces old 2-step flow with quest progress bar, XP rewards per step, and locked/active/complete states.
 - **Interactive Landing Page:** Typewriter hero cycling 4 phrases, animated stat counters (count-up on scroll), agent cards with green pulsing "RUNNING" dot + hover lift, interactive game health demo with animated bars on scroll, cascade level tier animation, FAQ accordion with border glow, CTA pulse on idle, scroll progress bar, subtle animated grid background. All CSS-only animations in globals.css, respects prefers-reduced-motion.
+- **CreatorProspectingAgent:** Daily agent that finds Roblox games (100-10K concurrent, monetized, recently updated). Scores prospects 1-10, enriches with game pass data + social links. Generates personalized outreach messages for top 10 via Claude. Stores in `ProspectList` table. Dashboard "Prospects" tab (founder-only) shows pipeline with filters. Cron: 5am UTC daily.
 
 ---
 

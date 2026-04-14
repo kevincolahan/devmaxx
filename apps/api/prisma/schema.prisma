@@ -311,6 +311,27 @@ model XPEvent {
   creator   Creator  @relation(fields: [creatorId], references: [id])
 }
 
+model ProspectList {
+  id                String   @id @default(cuid())
+  robloxGameId      String
+  gameName          String
+  creatorUsername    String
+  concurrentPlayers Int      @default(0)
+  visitCount        Int      @default(0)
+  hasGamePasses     Boolean  @default(false)
+  gamePassCount     Int      @default(0)
+  gamePassPriceMin  Int?
+  gamePassPriceMax  Int?
+  socialLinks       Json?
+  prospectScore     Int      @default(0)
+  outreachStatus    String   @default("pending")
+  outreachMessage   String?
+  signedUp          Boolean  @default(false)
+  scannedAt         DateTime @default(now())
+
+  @@unique([robloxGameId])
+}
+
 model KeyValue {
   key       String   @id
   value     String

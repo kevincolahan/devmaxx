@@ -22,6 +22,7 @@ import { runEventImpactPipeline } from '../agents/event-impact';
 import { runPlayerSentimentPipeline } from '../agents/player-sentiment';
 import { runXOutreachPipeline } from '../agents/x-outreach';
 import { runYouTubeOutreachPipeline } from '../agents/youtube-outreach';
+import { runCreatorProspectingPipeline } from '../agents/creator-prospecting';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -639,6 +640,21 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // CreatorProspecting — 5am UTC daily (before other outreach jobs)
+  cron.schedule('0 5 * * *', guardedJob('CreatorProspecting', async () => {
+    log('CreatorProspecting', 'Starting daily creator prospecting scan');
+    try {
+      const result = await withTimeout(
+        runCreatorProspectingPipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'CreatorProspecting'
+      );
+      log('CreatorProspecting', `Done — scanned: ${result.gamesScanned}, found: ${result.prospectsFound}, stored: ${result.prospectsStored}, outreach queued: ${result.outreachQueued}${result.errors.length > 0 ? `, errors: ${result.errors.length}` : ''}`);
+    } catch (err) {
+      log('CreatorProspecting', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
@@ -661,4 +677,5 @@ export function startScheduler() {
   console.log('  OutcomeTracking      — 0 7 * * *   (7am UTC daily)');
   console.log('  XOutreach            — 0 */4 * * *  (every 4 hours)');
   console.log('  YouTubeOutreach      — 0 14 * * 4  (2pm UTC Thursday)');
+  console.log('  CreatorProspecting   — 0 5 * * *   (5am UTC daily)');
 }
