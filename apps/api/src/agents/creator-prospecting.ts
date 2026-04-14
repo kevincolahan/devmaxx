@@ -67,10 +67,17 @@ interface ProspectData {
 }
 
 async function searchGames(keyword: string, limit = 50): Promise<GameSearchResult[]> {
-  const url = `https://games.roblox.com/v1/games/list?sortToken=&sortOrder=Desc&sortType=Concurrent&limit=${limit}&keyword=${encodeURIComponent(keyword)}`;
+  const url = `https://games.roblox.com/v1/games/list?model.keyword=${encodeURIComponent(keyword)}&model.maxRows=${limit}&model.startRows=0&model.gameFilter=0`;
 
+  console.log(`[Prospecting] searchGames URL: ${url}`);
   const res = await fetchWithTimeout(url);
-  if (!res.ok) return [];
+  console.log(`[Prospecting] searchGames "${keyword}" status: ${res.status}`);
+
+  if (!res.ok) {
+    const body = await res.text();
+    console.log(`[Prospecting] searchGames "${keyword}" error body: ${body.slice(0, 200)}`);
+    return [];
+  }
 
   const data = (await res.json()) as {
     games?: Array<{
@@ -83,6 +90,8 @@ async function searchGames(keyword: string, limit = 50): Promise<GameSearchResul
       creator: { id: number; type: string; name: string };
     }>;
   };
+
+  console.log(`[Prospecting] searchGames "${keyword}" found ${data.games?.length ?? 0} games`);
 
   return (data.games ?? []).map((g) => ({
     universeId: g.universeId,
@@ -98,10 +107,17 @@ async function searchGames(keyword: string, limit = 50): Promise<GameSearchResul
 }
 
 async function fetchSortedGames(sortToken: string, limit = 100): Promise<GameSearchResult[]> {
-  const url = `https://games.roblox.com/v1/games/list?sortToken=${sortToken}&sortOrder=Desc&limit=${limit}`;
+  const url = `https://games.roblox.com/v1/games/list?model.sortToken=${sortToken}&model.maxRows=${limit}&model.startRows=0&model.gameFilter=0`;
 
+  console.log(`[Prospecting] fetchSortedGames URL: ${url}`);
   const res = await fetchWithTimeout(url);
-  if (!res.ok) return [];
+  console.log(`[Prospecting] fetchSortedGames status: ${res.status}`);
+
+  if (!res.ok) {
+    const body = await res.text();
+    console.log(`[Prospecting] fetchSortedGames error body: ${body.slice(0, 200)}`);
+    return [];
+  }
 
   const data = (await res.json()) as {
     games?: Array<{
@@ -114,6 +130,8 @@ async function fetchSortedGames(sortToken: string, limit = 100): Promise<GameSea
       creator: { id: number; type: string; name: string };
     }>;
   };
+
+  console.log(`[Prospecting] fetchSortedGames found ${data.games?.length ?? 0} games`);
 
   return (data.games ?? []).map((g) => ({
     universeId: g.universeId,
@@ -130,14 +148,23 @@ async function fetchSortedGames(sortToken: string, limit = 100): Promise<GameSea
 
 async function getGameSortTokens(): Promise<string[]> {
   const url = 'https://games.roblox.com/v1/games/sorts?model.gameSortsContext=HomeSorts';
+  console.log(`[Prospecting] getGameSortTokens URL: ${url}`);
   const res = await fetchWithTimeout(url);
-  if (!res.ok) return [];
+  console.log(`[Prospecting] getGameSortTokens status: ${res.status}`);
+
+  if (!res.ok) {
+    const body = await res.text();
+    console.log(`[Prospecting] getGameSortTokens error body: ${body.slice(0, 200)}`);
+    return [];
+  }
 
   const data = (await res.json()) as {
     sorts?: Array<{ token: string; name: string }>;
   };
 
-  return (data.sorts ?? []).map((s) => s.token);
+  const tokens = (data.sorts ?? []).map((s) => s.token);
+  console.log(`[Prospecting] getGameSortTokens found ${tokens.length} sorts`);
+  return tokens;
 }
 
 async function fetchGamePasses(universeId: number): Promise<GamePassInfo[]> {
@@ -291,8 +318,10 @@ export async function runCreatorProspectingPipeline(
   for (const term of searchTerms) {
     try {
       const results = await searchGames(term, 50);
+      console.log(`[Prospecting] keyword "${term}" returned ${results.length} games`);
       allGames.push(...results);
     } catch (err) {
+      console.error(`[Prospecting] keyword "${term}" threw:`, err);
       errors.push(`Search "${term}" failed: ${String(err)}`);
     }
   }
@@ -315,6 +344,8 @@ export async function runCreatorProspectingPipeline(
   }
 
   gamesScanned = uniqueGames.size;
+  console.log(`[Prospecting] Total unique games after dedup: ${gamesScanned}`);
+  console.log(`[Prospecting] Excluding ${existingGameIds.size} existing + ${recentIds.size} recent`);
 
   // Filter to sweet spot
   const candidates = Array.from(uniqueGames.values()).filter((game) => {
@@ -332,6 +363,7 @@ export async function runCreatorProspectingPipeline(
   });
 
   prospectsFound = candidates.length;
+  console.log(`[Prospecting] Candidates after filtering (100-10K concurrent, updated <30d): ${prospectsFound}`);
 
   // Enrich top candidates (limit to 30 per run to respect rate limits)
   const enrichLimit = Math.min(candidates.length, 30);
