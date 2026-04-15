@@ -332,6 +332,19 @@ model ProspectList {
   @@unique([robloxGameId])
 }
 
+model TwitterFollowLog {
+  id           String    @id @default(cuid())
+  userId       String
+  username     String
+  action       String    // follow | unfollow | followback
+  followedAt   DateTime  @default(now())
+  unfollowedAt DateTime?
+  followedBack Boolean   @default(false)
+  reason       String
+
+  @@unique([userId, action, followedAt])
+}
+
 model KeyValue {
   key       String   @id
   value     String
