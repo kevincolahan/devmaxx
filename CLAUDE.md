@@ -27,7 +27,7 @@ content generation, and weekly growth briefs. Creators connect once and receive 
 - **AUTH_TRUST_HOST=true** must be set in Railway environment for NextAuth to work.
 - **Never store secrets in code.** All API keys go in environment variables only.
 - **Never use unicode bullet characters** in docx generation — use LevelFormat.BULLET.
-- **All Anthropic API calls use model:** `claude-sonnet-4-6-20250514`
+- **All Anthropic API calls use model:** `claude-sonnet-4-5-20251001`
 - **max_tokens:** 2048 for all Anthropic API calls.
 - **Credentials provider conflicts with PrismaAdapter** — set adapter to undefined when using credentials.
 
@@ -58,7 +58,7 @@ content generation, and weekly growth briefs. Creators connect once and receive 
 - **Adapter note:** PrismaAdapter conflicts with Credentials provider — set adapter to undefined if using credentials
 
 ### AI / Agents
-- **Primary model:** Anthropic claude-sonnet-4-6-20250514
+- **Primary model:** Anthropic claude-sonnet-4-5-20251001
 - **Max tokens:** 2048
 - **SDK:** `@anthropic-ai/sdk`
 - **All agents extend BaseAgent** from `packages/agent-core/src/base-agent.ts`
@@ -355,7 +355,7 @@ export abstract class BaseAgent {
       const userPrompt   = this.buildUserPrompt(context);
 
       const response = await this.client.messages.create({
-        model:      'claude-sonnet-4-6-20250514',
+        model:      'claude-sonnet-4-5-20251001',
         max_tokens: 2048,
         system:     systemPrompt,
         messages:   [{ role: 'user', content: userPrompt }]
@@ -599,7 +599,7 @@ Paste this at the start of each session to prime context:
 I am building Devmaxx (devmaxx.app) — an AI-powered SaaS for Roblox creators.
 Stack: Next.js 14, Tailwind CSS v3 pinned 3.4.17, Prisma v5 pinned 5.22.0,
 NextAuth v5, Railway (backend + Postgres), Vercel (frontend),
-Anthropic claude-sonnet-4-6-20250514, Resend, Cloudflare R2, Stripe.
+Anthropic claude-sonnet-4-5-20251001, Resend, Cloudflare R2, Stripe.
 All agents extend BaseAgent from packages/agent-core/src/base-agent.ts.
 Rules: Always output full file contents. Never truncate.
 All Railway routes: export const dynamic = 'force-dynamic'

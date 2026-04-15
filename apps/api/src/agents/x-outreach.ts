@@ -200,7 +200,7 @@ async function classifyAndDraftReplies(
     .join('\n');
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6-20250514',
+    model: 'claude-sonnet-4-5-20251001',
     max_tokens: 2048,
     system: `You are the growth strategist for Devmaxx (devmaxx.app), an AI-powered platform that helps Roblox game creators maximize DevEx earnings.
 

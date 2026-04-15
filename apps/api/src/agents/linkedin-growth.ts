@@ -125,7 +125,7 @@ async function scoreAndDraftComment(postText: string): Promise<{ score: number; 
   const client = new Anthropic();
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6-20250514',
+    model: 'claude-sonnet-4-5-20251001',
     max_tokens: 512,
     system: `You are Kevin Colahan, founder of Devmaxx (devmaxx.app), an AI platform for Roblox game creators.
 
