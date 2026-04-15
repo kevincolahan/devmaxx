@@ -417,6 +417,7 @@ export abstract class BaseAgent {
 | CommunityOutreachAgent | `agents/community-outreach.ts` | Weekly — Reddit + DevForum | 3 |
 | CommandExecutorAgent | `agents/command-executor.ts` | On natural language command | 2 |
 | CreatorProspectingAgent | `agents/creator-prospecting.ts` | Daily cron 5am UTC | 2 |
+| TwitterFollowAgent | `agents/twitter-follow.ts` | Daily cron 2pm UTC | 3 |
 
 ---
 
