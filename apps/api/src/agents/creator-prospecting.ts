@@ -4,23 +4,23 @@ import { PrismaClient } from '@prisma/client';
 /**
  * CreatorProspectingAgent
  *
- * Finds Roblox games in the sweet spot (100-10K concurrent) that have
- * monetization and are actively updated. Scores them, enriches data,
- * and queues top prospects for X outreach with personalized messages.
+ * Finds Roblox games in the sweet spot (100-10K concurrent), scores them,
+ * enriches with social data, and queues top prospects for X outreach.
  *
- * Working Roblox API endpoints (verified from Railway):
- *   - catalog.roblox.com/v1/search/items (keyword → asset/place IDs)
- *   - apis.roblox.com/universes/v1/places/{placeId}/universe (place → universe)
- *   - games.roblox.com/v1/games?universeIds= (batch game details)
- *   - apis.roblox.com/explore-api/v1/get-sorts (browse sorts with game set IDs)
- *   - economy.roblox.com/v2/universes/{id}/game-passes (game pass lookup)
- *   - accountinformation.roblox.com/v1/users/{id}/promotion-channels (socials)
+ * Working Roblox API endpoints (verified from Railway April 2026):
+ *   - catalog.roblox.com/v1/search/items (keyword → asset/place IDs)     ✅ 200
+ *   - apis.roblox.com/universes/v1/places/{id}/universe (place → universe) ✅ 200
+ *   - games.roblox.com/v1/games?universeIds= (batch game details)         ✅ 200
+ *   - apis.roblox.com/explore-api/v1/get-sorts (browse sorts)             ✅ 200
+ *   - accountinformation.roblox.com/v1/users/{id}/promotion-channels      ✅ 200
  *
- * Dead endpoints (404 from Railway as of April 2026):
- *   - games.roblox.com/v1/games/list
- *   - games.roblox.com/v1/games/sorts
- *   - games.roblox.com/v1/games/{id}/game-passes
- *   - develop.roblox.com/v1/universes
+ * Dead endpoints (404 from Railway):
+ *   - games.roblox.com/v1/games/list                    ❌
+ *   - games.roblox.com/v1/games/sorts                   ❌
+ *   - games.roblox.com/v1/games/{id}/game-passes        ❌
+ *   - economy.roblox.com/v2/universes/{id}/game-passes  ❌
+ *   - apis.roblox.com/explore-api/v1/get-games          ❌
+ *   - develop.roblox.com/v1/universes                   ❌
  */
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -44,7 +44,7 @@ async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Respon
   }
 }
 
-// ─── Roblox Public API Helpers ───────────────────────────────
+// ─── Types ──────────────────────────────────────────────────
 
 interface GameSearchResult {
   universeId: number;
@@ -56,12 +56,6 @@ interface GameSearchResult {
   creatorId: number;
   creatorType: string;
   creatorName: string;
-}
-
-interface GamePassInfo {
-  id: number;
-  name: string;
-  price: number | null;
 }
 
 interface ProspectData {
@@ -78,9 +72,9 @@ interface ProspectData {
   updatedRecently: boolean;
 }
 
-// ─── Strategy 1: Catalog search → place IDs → universe IDs → game details ───
+// ─── Catalog Search (WORKING) ───────────────────────────────
 
-async function catalogSearch(keyword: string, limit = 50): Promise<number[]> {
+async function catalogSearch(keyword: string, limit = 30): Promise<number[]> {
   const url = `https://catalog.roblox.com/v1/search/items?category=Game&keyword=${encodeURIComponent(keyword)}&limit=${Math.min(limit, 30)}`;
   log(`catalogSearch URL: ${url}`);
 
@@ -103,6 +97,8 @@ async function catalogSearch(keyword: string, limit = 50): Promise<number[]> {
   return ids;
 }
 
+// ─── Place → Universe Conversion (WORKING) ──────────────────
+
 async function placeToUniverse(placeId: number): Promise<number | null> {
   const url = `https://apis.roblox.com/universes/v1/places/${placeId}/universe`;
   try {
@@ -117,7 +113,7 @@ async function placeToUniverse(placeId: number): Promise<number | null> {
 
 async function placesToUniverses(placeIds: number[]): Promise<number[]> {
   const universeIds: number[] = [];
-  // Process in parallel batches of 10 to speed things up
+  // Process in parallel batches of 10
   for (let i = 0; i < placeIds.length; i += 10) {
     const batch = placeIds.slice(i, i + 10);
     const results = await Promise.all(batch.map((id) => placeToUniverse(id)));
@@ -129,7 +125,7 @@ async function placesToUniverses(placeIds: number[]): Promise<number[]> {
   return universeIds;
 }
 
-// ─── Strategy 2: Explore API sorts → game set IDs → universe IDs ───
+// ─── Explore API Sorts (WORKING — embedded universe IDs only) ─
 
 async function getExploreSortUniverseIds(): Promise<number[]> {
   const url = 'https://apis.roblox.com/explore-api/v1/get-sorts?sessionId=prospecting';
@@ -146,8 +142,6 @@ async function getExploreSortUniverseIds(): Promise<number[]> {
 
   const data = (await res.json()) as {
     sorts?: Array<{
-      gameSetTypeId?: number;
-      gameSetTargetId?: number;
       games?: Array<{ universeId?: number }>;
       topicLayoutData?: {
         gameSetData?: Array<{
@@ -159,11 +153,9 @@ async function getExploreSortUniverseIds(): Promise<number[]> {
 
   const universeIds: number[] = [];
   for (const sort of data.sorts ?? []) {
-    // Some sorts embed games directly
     for (const game of sort.games ?? []) {
       if (game.universeId) universeIds.push(game.universeId);
     }
-    // Some sorts have nested gameSetData
     for (const gs of sort.topicLayoutData?.gameSetData ?? []) {
       for (const game of gs.games ?? []) {
         if (game.universeId) universeIds.push(game.universeId);
@@ -172,55 +164,21 @@ async function getExploreSortUniverseIds(): Promise<number[]> {
   }
 
   log(`getExploreSorts found ${universeIds.length} embedded universe IDs`);
-
-  // Also try fetching game sets from the sorts
-  const gameSetIds: Array<{ typeId: number; targetId: number }> = [];
-  for (const sort of data.sorts ?? []) {
-    if (sort.gameSetTypeId && sort.gameSetTargetId) {
-      gameSetIds.push({ typeId: sort.gameSetTypeId, targetId: sort.gameSetTargetId });
-    }
-  }
-
-  // Fetch first 3 game sets for more universe IDs
-  for (const gs of gameSetIds.slice(0, 3)) {
-    try {
-      const gsUrl = `https://apis.roblox.com/explore-api/v1/get-games?gameSetTypeId=${gs.typeId}&gameSetTargetId=${gs.targetId}&maxRows=50`;
-      log(`getGames URL: ${gsUrl}`);
-      const gsRes = await fetchWithTimeout(gsUrl);
-      log(`getGames status: ${gsRes.status}`);
-
-      if (gsRes.ok) {
-        const gsData = (await gsRes.json()) as {
-          games?: Array<{ universeId?: number }>;
-        };
-        for (const game of gsData.games ?? []) {
-          if (game.universeId) universeIds.push(game.universeId);
-        }
-        log(`getGames set ${gs.typeId}/${gs.targetId} returned ${gsData.games?.length ?? 0} games`);
-      } else {
-        const body = await gsRes.text();
-        log(`getGames error: ${body.slice(0, 200)}`);
-      }
-    } catch (err) {
-      log(`getGames threw: ${String(err)}`);
-    }
-  }
-
   return universeIds;
 }
 
-// ─── Batch game details (CONFIRMED WORKING) ───
+// ─── Batch Game Details (WORKING) ───────────────────────────
 
 async function fetchGamesByIds(universeIds: number[]): Promise<GameSearchResult[]> {
   if (universeIds.length === 0) return [];
 
   const allGames: GameSearchResult[] = [];
 
-  // Process in batches of 100 (API limit)
-  for (let i = 0; i < universeIds.length; i += 100) {
-    const batch = universeIds.slice(i, i + 100);
+  // Process in batches of 50
+  for (let i = 0; i < universeIds.length; i += 50) {
+    const batch = universeIds.slice(i, i + 50);
     const url = `https://games.roblox.com/v1/games?universeIds=${batch.join(',')}`;
-    log(`fetchGamesByIds URL: ${url.slice(0, 120)}... (${batch.length} IDs)`);
+    log(`fetchGamesByIds batch ${Math.floor(i / 50) + 1}: ${batch.length} IDs`);
 
     const res = await fetchWithTimeout(url);
     log(`fetchGamesByIds status: ${res.status}`);
@@ -264,61 +222,29 @@ async function fetchGamesByIds(universeIds: number[]): Promise<GameSearchResult[
   return allGames;
 }
 
-// ─── Game passes (try multiple endpoints) ───
-
-async function fetchGamePasses(universeId: number): Promise<GamePassInfo[]> {
-  // Try economy API (newer)
-  const economyUrl = `https://economy.roblox.com/v2/universes/${universeId}/game-passes?limit=100&sortOrder=Asc`;
-  try {
-    const res = await fetchWithTimeout(economyUrl);
-    if (res.ok) {
-      const data = (await res.json()) as {
-        data?: Array<{ id: number; name: string; price: number | null }>;
-      };
-      if (data.data && data.data.length > 0) {
-        return data.data.map((gp) => ({ id: gp.id, name: gp.name, price: gp.price }));
-      }
-    }
-  } catch {
-    // fall through
-  }
-
-  // Try games API v1 (may still work for some)
-  const gamesUrl = `https://games.roblox.com/v1/games/${universeId}/game-passes?limit=100&sortOrder=Asc`;
-  try {
-    const res = await fetchWithTimeout(gamesUrl);
-    if (res.ok) {
-      const data = (await res.json()) as {
-        data?: Array<{ id: number; name: string; price: number | null }>;
-      };
-      return (data.data ?? []).map((gp) => ({ id: gp.id, name: gp.name, price: gp.price }));
-    }
-  } catch {
-    // fall through
-  }
-
-  return [];
-}
-
-// ─── User socials ───
+// ─── User Socials (WORKING) ─────────────────────────────────
 
 async function fetchUserSocials(userId: number): Promise<Record<string, string>> {
   const url = `https://accountinformation.roblox.com/v1/users/${userId}/promotion-channels`;
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) return {};
+  try {
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) return {};
 
-  const data = (await res.json()) as Record<string, string | null>;
-  const socials: Record<string, string> = {};
+    const data = (await res.json()) as Record<string, string | null>;
+    const socials: Record<string, string> = {};
 
-  if (data.twitter) socials.twitter = data.twitter;
-  if (data.youtube) socials.youtube = data.youtube;
-  if (data.twitch) socials.twitch = data.twitch;
-  if (data.facebook) socials.facebook = data.facebook;
+    if (data.twitter) socials.twitter = data.twitter;
+    if (data.youtube) socials.youtube = data.youtube;
+    if (data.twitch) socials.twitch = data.twitch;
+    if (data.facebook) socials.facebook = data.facebook;
 
-  return socials;
+    return socials;
+  } catch {
+    return {};
+  }
 }
 
-// ─── Scoring ────────────────────────────────────────────────
+// ─── Scoring (no game pass data — endpoints are dead) ───────
 
 function scoreProspect(prospect: ProspectData): number {
   let score = 5; // Base score
@@ -334,25 +260,20 @@ function scoreProspect(prospect: ProspectData): number {
     score -= 1; // Too small
   }
 
-  // Monetization
-  if (prospect.hasGamePasses && prospect.gamePassCount >= 3) {
-    score += 2; // Serious about monetization
-  } else if (prospect.hasGamePasses) {
-    score += 1; // Some monetization
-  } else {
-    score -= 2; // No monetization = not our ICP
+  // Visit count (engagement + maturity signal)
+  if (prospect.visitCount >= 10_000_000) {
+    score += 2; // Very established
+  } else if (prospect.visitCount >= 1_000_000) {
+    score += 1; // Solid traction
   }
 
-  // Visit count (engagement)
-  if (prospect.visitCount >= 1_000_000) score += 1;
-  if (prospect.visitCount >= 10_000_000) score += 1;
-
-  // Recently updated
+  // Recently updated (active developer)
   if (prospect.updatedRecently) score += 1;
   else score -= 1;
 
-  // Social presence (easier to reach)
-  if (prospect.socialLinks.twitter) score += 1;
+  // Social presence (reachable via X/Twitter)
+  if (prospect.socialLinks.twitter) score += 2;
+  else if (Object.keys(prospect.socialLinks).length > 0) score += 1;
 
   return Math.max(1, Math.min(10, score));
 }
@@ -373,7 +294,7 @@ async function generateOutreachMessage(
 Rules:
 - Max 280 characters (must fit in a tweet/DM)
 - Reference their specific game by name
-- Reference a specific metric (concurrent players or game passes)
+- Reference a specific metric (concurrent players or visits)
 - Sound like a fellow Roblox creator, not a marketer
 - Never use buzzwords like "revolutionize" or "game-changing"
 - Include a soft CTA (check it out, not "sign up now")
@@ -387,8 +308,6 @@ Game: ${prospect.gameName}
 Creator: ${prospect.creatorUsername}
 Concurrent players: ${prospect.concurrentPlayers.toLocaleString()}
 Total visits: ${prospect.visitCount.toLocaleString()}
-Game passes: ${prospect.gamePassCount} (${prospect.hasGamePasses ? 'active' : 'none'})
-${prospect.gamePassPriceMin !== null ? `Price range: ${prospect.gamePassPriceMin}-${prospect.gamePassPriceMax} Robux` : ''}
 Prospect score: ${score}/10
 
 Write a single tweet-length message.`,
@@ -400,9 +319,9 @@ Write a single tweet-length message.`,
   return text.type === 'text' ? text.text.trim() : '';
 }
 
-// ─── Discovery: multi-strategy game finding ─────────────────
+// ─── Discovery ──────────────────────────────────────────────
 
-// Hardcoded popular Roblox universe IDs across genres (last resort fallback)
+// Hardcoded popular Roblox universe IDs across genres (baseline fallback)
 const KNOWN_UNIVERSE_IDS = [
   // Tycoons & Simulators
   3956818381, 4872321990, 2809202155, 2474168535, 1537690962,
@@ -437,7 +356,7 @@ async function discoverGames(searchTerms: string[], errors: string[]): Promise<G
   }
   log(`Strategy 1 total unique universe IDs: ${allUniverseIds.size}`);
 
-  // Strategy 2: Explore API sorts → universe IDs
+  // Strategy 2: Explore API sorts → embedded universe IDs
   log('=== Strategy 2: Explore API sorts ===');
   try {
     const exploreIds = await getExploreSortUniverseIds();
@@ -448,12 +367,12 @@ async function discoverGames(searchTerms: string[], errors: string[]): Promise<G
     errors.push(`Explore API failed: ${String(err)}`);
   }
 
-  // Strategy 3: Hardcoded popular IDs (always include as baseline)
+  // Strategy 3: Hardcoded popular IDs (always included as baseline)
   log('=== Strategy 3: Hardcoded popular IDs ===');
   KNOWN_UNIVERSE_IDS.forEach((id) => allUniverseIds.add(id));
   log(`After hardcoded IDs, total unique universe IDs: ${allUniverseIds.size}`);
 
-  // Fetch full game details for all collected universe IDs
+  // Fetch full game details for all universe IDs
   if (allUniverseIds.size === 0) {
     log('No universe IDs found from any strategy');
     return [];
@@ -496,7 +415,7 @@ export async function runCreatorProspectingPipeline(
   });
   const recentIds = new Set(recentProspects.map((p) => p.robloxGameId));
 
-  // Discover games using multi-strategy approach
+  // Discover games
   const searchTerms = ['tycoon', 'simulator', 'obby', 'rpg', 'roleplay', 'adventure', 'horror'];
   const allGames = await discoverGames(searchTerms, errors);
 
@@ -535,11 +454,6 @@ export async function runCreatorProspectingPipeline(
   for (let i = 0; i < enrichLimit; i++) {
     const game = candidates[i];
     try {
-      // Fetch game passes
-      const gamePasses = await fetchGamePasses(game.universeId);
-      const pricedPasses = gamePasses.filter((gp) => gp.price !== null && gp.price > 0);
-      const prices = pricedPasses.map((gp) => gp.price!);
-
       // Fetch creator socials (only for User type, not Group)
       let socials: Record<string, string> = {};
       if (game.creatorType === 'User') {
@@ -555,17 +469,17 @@ export async function runCreatorProspectingPipeline(
         creatorUsername: game.creatorName,
         concurrentPlayers: game.playing,
         visitCount: game.visits,
-        hasGamePasses: gamePasses.length > 0,
-        gamePassCount: gamePasses.length,
-        gamePassPriceMin: prices.length > 0 ? Math.min(...prices) : null,
-        gamePassPriceMax: prices.length > 0 ? Math.max(...prices) : null,
+        hasGamePasses: false, // Game pass APIs are dead — skip for now
+        gamePassCount: 0,
+        gamePassPriceMin: null,
+        gamePassPriceMax: null,
         socialLinks: socials,
         updatedRecently: updatedAt >= thirtyDaysAgo,
       };
 
       const score = scoreProspect(prospect);
       enrichedProspects.push({ ...prospect, score });
-      log(`Enriched: ${game.name} (score=${score}, playing=${game.playing}, passes=${gamePasses.length})`);
+      log(`Enriched: ${game.name} (score=${score}, playing=${game.playing}, socials=${Object.keys(socials).join(',')})`);
 
       // Small delay to respect rate limits
       await new Promise((r) => setTimeout(r, 200));
