@@ -26,6 +26,7 @@ import { runCreatorProspectingPipeline } from '../agents/creator-prospecting';
 import { runTwitterFollowPipeline } from '../agents/twitter-follow';
 import { runLinkedInGrowthPipeline } from '../agents/linkedin-growth';
 import { runLeaderboardUpdaterPipeline } from '../agents/leaderboard-updater';
+import { runCreatorEnrichmentPipeline } from '../agents/creator-enrichment';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -703,6 +704,21 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // ─── CreatorEnrichment — 0 6 * * * (6am UTC daily) ──────
+  cron.schedule('0 6 * * *', guardedJob('CreatorEnrichment', async () => {
+    log('CreatorEnrichment', 'Starting daily creator enrichment pipeline');
+    try {
+      const result = await withTimeout(
+        runCreatorEnrichmentPipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'CreatorEnrichment'
+      );
+      log('CreatorEnrichment', `Done — ${result.creatorsEnriched} enriched (${result.prospectsUpdated} prospects, ${result.leaderboardUpdated} leaderboard), ${result.outreachQueued} outreach queued${result.errors.length > 0 ? `, errors: ${result.errors.length}` : ''}`);
+    } catch (err) {
+      log('CreatorEnrichment', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
@@ -729,4 +745,5 @@ export function startScheduler() {
   console.log('  TwitterFollow        — 0 14 * * *  (2pm UTC daily)');
   console.log('  LinkedInGrowth       — 0 15 * * *  (3pm UTC daily)');
   console.log('  LeaderboardUpdater   — 0 8 * * *   (8am UTC daily)');
+  console.log('  CreatorEnrichment    — 0 6 * * *   (6am UTC daily)');
 }

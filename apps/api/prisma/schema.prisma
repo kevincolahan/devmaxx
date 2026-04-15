@@ -312,22 +312,32 @@ model XPEvent {
 }
 
 model ProspectList {
-  id                String   @id @default(cuid())
-  robloxGameId      String
-  gameName          String
-  creatorUsername    String
-  concurrentPlayers Int      @default(0)
-  visitCount        Int      @default(0)
-  hasGamePasses     Boolean  @default(false)
-  gamePassCount     Int      @default(0)
-  gamePassPriceMin  Int?
-  gamePassPriceMax  Int?
-  socialLinks       Json?
-  prospectScore     Int      @default(0)
-  outreachStatus    String   @default("pending")
-  outreachMessage   String?
-  signedUp          Boolean  @default(false)
-  scannedAt         DateTime @default(now())
+  id                  String    @id @default(cuid())
+  robloxGameId        String
+  gameName            String
+  creatorUsername      String
+  concurrentPlayers   Int       @default(0)
+  visitCount          Int       @default(0)
+  hasGamePasses       Boolean   @default(false)
+  gamePassCount       Int       @default(0)
+  gamePassPriceMin    Int?
+  gamePassPriceMax    Int?
+  socialLinks         Json?
+  prospectScore       Int       @default(0)
+  outreachStatus      String    @default("pending")
+  outreachMessage     String?
+  signedUp            Boolean   @default(false)
+  scannedAt           DateTime  @default(now())
+  twitterHandle       String?
+  twitterFollowers    Int?
+  youtubeChannel      String?
+  youtubeSubscribers  Int?
+  twitchHandle        String?
+  redditUsername      String?
+  devforumUsername    String?
+  devforumTrustLevel Int?
+  enrichedAt          DateTime?
+  socialScore         Int?
 
   @@unique([robloxGameId])
 }
@@ -356,18 +366,44 @@ model LinkedInGrowthLog {
 }
 
 model Leaderboard {
-  id                    String   @id @default(cuid())
-  universeId            String   @unique
+  id                    String    @id @default(cuid())
+  universeId            String    @unique
   gameName              String
   creatorName           String
   thumbnailUrl          String?
-  concurrentPlayers     Int      @default(0)
-  totalVisits           Int      @default(0)
-  estimatedMonthlyDevEx Float    @default(0)
+  concurrentPlayers     Int       @default(0)
+  totalVisits           Int       @default(0)
+  estimatedMonthlyDevEx Float     @default(0)
   genre                 String?
-  weekOverWeekChange    Float    @default(0)
-  rank                  Int      @default(0)
-  updatedAt             DateTime @updatedAt
+  weekOverWeekChange    Float     @default(0)
+  rank                  Int       @default(0)
+  updatedAt             DateTime  @updatedAt
+  twitterHandle         String?
+  twitterFollowers      Int?
+  youtubeChannel        String?
+  youtubeSubscribers    Int?
+  twitchHandle          String?
+  redditUsername        String?
+  devforumUsername      String?
+  devforumTrustLevel   Int?
+  enrichedAt            DateTime?
+  socialScore           Int?
+}
+
+model CreatorOutreachQueue {
+  id             String    @id @default(cuid())
+  creatorId      String
+  creatorName    String
+  gameName       String
+  platform       String    // twitter | youtube | devforum
+  platformHandle String
+  status         String    @default("pending") // pending | sent | replied | skipped
+  source         String    @default("prospect") // prospect | leaderboard
+  scheduledAt    DateTime?
+  sentAt         DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@unique([creatorId, platform])
 }
 
 model KeyValue {

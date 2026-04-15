@@ -420,6 +420,7 @@ export abstract class BaseAgent {
 | TwitterFollowAgent | `agents/twitter-follow.ts` | Daily cron 2pm UTC | 3 |
 | LinkedInGrowthAgent | `agents/linkedin-growth.ts` | Daily cron 3pm UTC | 3 |
 | LeaderboardUpdaterAgent | `agents/leaderboard-updater.ts` | Daily cron 8am UTC | 2 |
+| CreatorEnrichmentAgent | `agents/creator-enrichment.ts` | Daily cron 6am UTC | 2 |
 
 ---
 
@@ -508,6 +509,12 @@ INSTAGRAM_ACCESS_TOKEN=
 INSTAGRAM_ACCOUNT_ID=
 DEVMAXX_DEFAULT_IMAGE_URL=
 
+# Twitter (v2 bearer for search)
+TWITTER_BEARER_TOKEN=
+
+# YouTube Data API v3
+YOUTUBE_API_KEY=
+
 # Marketing
 APIFY_API_TOKEN=
 GHOST_ADMIN_API_KEY=
@@ -575,6 +582,7 @@ N8N_WEBHOOK_URL=
 - **Quest-Style Onboarding:** QuestOnboarding component replaces old 2-step flow with quest progress bar, XP rewards per step, and locked/active/complete states.
 - **Interactive Landing Page:** Typewriter hero cycling 4 phrases, animated stat counters (count-up on scroll), agent cards with green pulsing "RUNNING" dot + hover lift, interactive game health demo with animated bars on scroll, cascade level tier animation, FAQ accordion with border glow, CTA pulse on idle, scroll progress bar, subtle animated grid background. All CSS-only animations in globals.css, respects prefers-reduced-motion.
 - **CreatorProspectingAgent:** Daily agent that finds Roblox games (100-10K concurrent, monetized, recently updated). Scores prospects 1-10, enriches with game pass data + social links. Generates personalized outreach messages for top 10 via Claude. Stores in `ProspectList` table. Dashboard "Prospects" tab (founder-only) shows pipeline with filters. Cron: 5am UTC daily.
+- **CreatorEnrichmentAgent:** Daily agent that enriches ProspectList and Leaderboard records with social presence data. Searches Roblox profile promotion channels, Twitter/X, YouTube, Reddit, and DevForum. Calculates socialScore 1-10. Queues enriched creators into `CreatorOutreachQueue` for targeted outreach via XOutreach, YouTube, and DevForum agents. Max 50 creators per run, 500ms rate limit. Prospects tab shows social icons with links. Cron: 6am UTC daily.
 - **Public Leaderboard:** SEO-optimized public page at `/leaderboard` showing top 50 Roblox games by concurrent players and estimated DevEx. Three tabs: Top by Players, Top by Est. DevEx, Rising. Gaming aesthetic with gold/silver/bronze rank badges, genre badges, trend indicators, share-to-X buttons. LeaderboardUpdaterAgent runs daily 8am UTC, stores in `Leaderboard` table. API route at `/api/leaderboard` with 6-hour cache. Viral mechanic: pre-filled tweet share per game row. CTA drives signups.
 
 ---
