@@ -25,6 +25,7 @@ import { runYouTubeOutreachPipeline } from '../agents/youtube-outreach';
 import { runCreatorProspectingPipeline } from '../agents/creator-prospecting';
 import { runTwitterFollowPipeline } from '../agents/twitter-follow';
 import { runLinkedInGrowthPipeline } from '../agents/linkedin-growth';
+import { runLeaderboardUpdaterPipeline } from '../agents/leaderboard-updater';
 
 // ─── Plan-based eligibility ──────────────────────────────────
 // free    → GrowthBrief only
@@ -687,6 +688,21 @@ export function startScheduler() {
     }
   }), { timezone: 'UTC' });
 
+  // ─── LeaderboardUpdater — 0 8 * * * (8am UTC daily) ──────
+  cron.schedule('0 8 * * *', guardedJob('LeaderboardUpdater', async () => {
+    log('LeaderboardUpdater', 'Starting daily leaderboard update');
+    try {
+      const result = await withTimeout(
+        runLeaderboardUpdaterPipeline(db),
+        BATCH_JOB_TIMEOUT_MS,
+        'LeaderboardUpdater'
+      );
+      log('LeaderboardUpdater', `Done — ${result.gamesUpdated} games updated, ${result.gamesScanned} scanned${result.errors.length > 0 ? `, errors: ${result.errors.length}` : ''}`);
+    } catch (err) {
+      log('LeaderboardUpdater', `FAILED: ${err}`);
+    }
+  }), { timezone: 'UTC' });
+
   console.log('[CRON] All jobs registered (with guards: 30s/game timeout, 5min max runtime, lock guard):');
   console.log('  MetricsMonitor       — 0 6 * * *    (6am UTC daily)');
   console.log('  NewsMonitor          — 0 6 * * 1    (6am UTC Monday)');
@@ -712,4 +728,5 @@ export function startScheduler() {
   console.log('  CreatorProspecting   — 0 5 * * *   (5am UTC daily)');
   console.log('  TwitterFollow        — 0 14 * * *  (2pm UTC daily)');
   console.log('  LinkedInGrowth       — 0 15 * * *  (3pm UTC daily)');
+  console.log('  LeaderboardUpdater   — 0 8 * * *   (8am UTC daily)');
 }

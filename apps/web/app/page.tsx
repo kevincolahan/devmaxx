@@ -696,6 +696,7 @@ export default function Home() {
                 <p className="mt-1 text-sm text-gray-600">Built for Roblox creators, by a creator.</p>
               </div>
               <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-500">
+                <Link href="/leaderboard" className="transition hover:text-gray-300">Leaderboard</Link>
                 <Link href="/pricing" className="transition hover:text-gray-300">Pricing</Link>
                 <Link href="/devex-calculator" className="transition hover:text-gray-300">DevEx Calculator</Link>
                 <Link href="/privacy" className="transition hover:text-gray-300">Privacy</Link>

@@ -71,6 +71,17 @@
 .delay-600 { animation-delay: 600ms; }
 .delay-700 { animation-delay: 700ms; }
 
+/* ── Leaderboard animations ── */
+
+@keyframes rank-glow {
+  0%, 100% { box-shadow: 0 0 6px 0 currentColor; }
+  50% { box-shadow: 0 0 16px 2px currentColor; }
+}
+
+.animate-rank-glow {
+  animation: rank-glow 2s ease-in-out infinite;
+}
+
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-blink,
