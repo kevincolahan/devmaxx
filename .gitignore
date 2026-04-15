@@ -10,5 +10,3 @@ coverage/
 .vercel
 prisma/*.db
 .nixpacks
-
-.vercel
