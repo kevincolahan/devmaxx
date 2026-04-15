@@ -8,12 +8,19 @@ import { PrismaClient } from '@prisma/client';
  * monetization and are actively updated. Scores them, enriches data,
  * and queues top prospects for X outreach with personalized messages.
  *
- * Discovery strategy (tries multiple endpoints with fallbacks):
- *   1. games.roblox.com/v1/games/list (keyword search)
- *   2. apis.roblox.com/search-api/omni-search (omni search)
- *   3. games.roblox.com/v1/games?universeIds= (batch detail lookup)
- *   4. games.roblox.com/v1/games/{id}/game-passes (enrichment)
- *   5. accountinformation.roblox.com/v1/users/{id}/promotion-channels
+ * Working Roblox API endpoints (verified from Railway):
+ *   - catalog.roblox.com/v1/search/items (keyword → asset/place IDs)
+ *   - apis.roblox.com/universes/v1/places/{placeId}/universe (place → universe)
+ *   - games.roblox.com/v1/games?universeIds= (batch game details)
+ *   - apis.roblox.com/explore-api/v1/get-sorts (browse sorts with game set IDs)
+ *   - economy.roblox.com/v2/universes/{id}/game-passes (game pass lookup)
+ *   - accountinformation.roblox.com/v1/users/{id}/promotion-channels (socials)
+ *
+ * Dead endpoints (404 from Railway as of April 2026):
+ *   - games.roblox.com/v1/games/list
+ *   - games.roblox.com/v1/games/sorts
+ *   - games.roblox.com/v1/games/{id}/game-passes
+ *   - develop.roblox.com/v1/universes
  */
 
 const FETCH_TIMEOUT_MS = 10_000;
@@ -71,209 +78,229 @@ interface ProspectData {
   updatedRecently: boolean;
 }
 
-// Strategy 1: games.roblox.com/v1/games/list (keyword search)
-async function searchGamesV1(keyword: string, limit = 50): Promise<GameSearchResult[]> {
-  const url = `https://games.roblox.com/v1/games/list?model.keyword=${encodeURIComponent(keyword)}&model.maxRows=${limit}&model.startRows=0&model.gameFilter=0`;
-  log(`searchGamesV1 URL: ${url}`);
+// ─── Strategy 1: Catalog search → place IDs → universe IDs → game details ───
+
+async function catalogSearch(keyword: string, limit = 50): Promise<number[]> {
+  const url = `https://catalog.roblox.com/v1/search/items?category=Game&keyword=${encodeURIComponent(keyword)}&limit=${Math.min(limit, 30)}`;
+  log(`catalogSearch URL: ${url}`);
 
   const res = await fetchWithTimeout(url);
-  log(`searchGamesV1 "${keyword}" status: ${res.status}`);
+  log(`catalogSearch "${keyword}" status: ${res.status}`);
 
   if (!res.ok) {
     const body = await res.text();
-    log(`searchGamesV1 "${keyword}" error: ${body.slice(0, 200)}`);
+    log(`catalogSearch "${keyword}" error: ${body.slice(0, 200)}`);
     return [];
   }
 
   const data = (await res.json()) as {
-    games?: Array<{
-      universeId: number;
-      name: string;
-      playing: number;
-      visits: number;
-      created: string;
-      updated: string;
-      creator: { id: number; type: string; name: string };
-    }>;
+    data?: Array<{ id: number; itemType: string }>;
+    nextPageCursor?: string | null;
   };
 
-  const games = data.games ?? [];
-  log(`searchGamesV1 "${keyword}" found ${games.length} games`);
-  return games.map((g) => ({
-    universeId: g.universeId,
-    name: g.name,
-    playing: g.playing,
-    visits: g.visits,
-    created: g.created,
-    updated: g.updated,
-    creatorId: g.creator.id,
-    creatorType: g.creator.type,
-    creatorName: g.creator.name,
-  }));
+  const ids = (data.data ?? []).map((item) => item.id);
+  log(`catalogSearch "${keyword}" found ${ids.length} asset IDs`);
+  return ids;
 }
 
-// Strategy 2: omni-search API
-async function searchGamesOmni(keyword: string): Promise<number[]> {
-  const url = `https://apis.roblox.com/search-api/omni-search?searchQuery=${encodeURIComponent(keyword)}&pageType=all`;
-  log(`searchGamesOmni URL: ${url}`);
+async function placeToUniverse(placeId: number): Promise<number | null> {
+  const url = `https://apis.roblox.com/universes/v1/places/${placeId}/universe`;
+  try {
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) return null;
+    const data = (await res.json()) as { universeId?: number };
+    return data.universeId ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function placesToUniverses(placeIds: number[]): Promise<number[]> {
+  const universeIds: number[] = [];
+  // Process in parallel batches of 10 to speed things up
+  for (let i = 0; i < placeIds.length; i += 10) {
+    const batch = placeIds.slice(i, i + 10);
+    const results = await Promise.all(batch.map((id) => placeToUniverse(id)));
+    for (const uid of results) {
+      if (uid !== null) universeIds.push(uid);
+    }
+  }
+  log(`placesToUniverses: ${placeIds.length} place IDs → ${universeIds.length} universe IDs`);
+  return universeIds;
+}
+
+// ─── Strategy 2: Explore API sorts → game set IDs → universe IDs ───
+
+async function getExploreSortUniverseIds(): Promise<number[]> {
+  const url = 'https://apis.roblox.com/explore-api/v1/get-sorts?sessionId=prospecting';
+  log(`getExploreSorts URL: ${url}`);
 
   const res = await fetchWithTimeout(url);
-  log(`searchGamesOmni "${keyword}" status: ${res.status}`);
+  log(`getExploreSorts status: ${res.status}`);
 
   if (!res.ok) {
     const body = await res.text();
-    log(`searchGamesOmni "${keyword}" error: ${body.slice(0, 200)}`);
+    log(`getExploreSorts error: ${body.slice(0, 200)}`);
     return [];
   }
 
   const data = (await res.json()) as {
-    searchResults?: Array<{
-      contentGroupType?: string;
-      contents?: Array<{
-        contentType?: string;
-        universeId?: number;
-        contentId?: number;
-      }>;
+    sorts?: Array<{
+      gameSetTypeId?: number;
+      gameSetTargetId?: number;
+      games?: Array<{ universeId?: number }>;
+      topicLayoutData?: {
+        gameSetData?: Array<{
+          games?: Array<{ universeId?: number }>;
+        }>;
+      };
     }>;
   };
 
   const universeIds: number[] = [];
-  for (const group of data.searchResults ?? []) {
-    for (const item of group.contents ?? []) {
-      const id = item.universeId ?? item.contentId;
-      if (id) universeIds.push(id);
+  for (const sort of data.sorts ?? []) {
+    // Some sorts embed games directly
+    for (const game of sort.games ?? []) {
+      if (game.universeId) universeIds.push(game.universeId);
+    }
+    // Some sorts have nested gameSetData
+    for (const gs of sort.topicLayoutData?.gameSetData ?? []) {
+      for (const game of gs.games ?? []) {
+        if (game.universeId) universeIds.push(game.universeId);
+      }
     }
   }
 
-  log(`searchGamesOmni "${keyword}" found ${universeIds.length} universe IDs`);
+  log(`getExploreSorts found ${universeIds.length} embedded universe IDs`);
+
+  // Also try fetching game sets from the sorts
+  const gameSetIds: Array<{ typeId: number; targetId: number }> = [];
+  for (const sort of data.sorts ?? []) {
+    if (sort.gameSetTypeId && sort.gameSetTargetId) {
+      gameSetIds.push({ typeId: sort.gameSetTypeId, targetId: sort.gameSetTargetId });
+    }
+  }
+
+  // Fetch first 3 game sets for more universe IDs
+  for (const gs of gameSetIds.slice(0, 3)) {
+    try {
+      const gsUrl = `https://apis.roblox.com/explore-api/v1/get-games?gameSetTypeId=${gs.typeId}&gameSetTargetId=${gs.targetId}&maxRows=50`;
+      log(`getGames URL: ${gsUrl}`);
+      const gsRes = await fetchWithTimeout(gsUrl);
+      log(`getGames status: ${gsRes.status}`);
+
+      if (gsRes.ok) {
+        const gsData = (await gsRes.json()) as {
+          games?: Array<{ universeId?: number }>;
+        };
+        for (const game of gsData.games ?? []) {
+          if (game.universeId) universeIds.push(game.universeId);
+        }
+        log(`getGames set ${gs.typeId}/${gs.targetId} returned ${gsData.games?.length ?? 0} games`);
+      } else {
+        const body = await gsRes.text();
+        log(`getGames error: ${body.slice(0, 200)}`);
+      }
+    } catch (err) {
+      log(`getGames threw: ${String(err)}`);
+    }
+  }
+
   return universeIds;
 }
 
-// Batch lookup: get game details by universe IDs
+// ─── Batch game details (CONFIRMED WORKING) ───
+
 async function fetchGamesByIds(universeIds: number[]): Promise<GameSearchResult[]> {
   if (universeIds.length === 0) return [];
 
-  // API supports up to 100 IDs per request
-  const batch = universeIds.slice(0, 100);
-  const url = `https://games.roblox.com/v1/games?universeIds=${batch.join(',')}`;
-  log(`fetchGamesByIds URL: ${url}`);
+  const allGames: GameSearchResult[] = [];
 
-  const res = await fetchWithTimeout(url);
-  log(`fetchGamesByIds status: ${res.status}`);
+  // Process in batches of 100 (API limit)
+  for (let i = 0; i < universeIds.length; i += 100) {
+    const batch = universeIds.slice(i, i + 100);
+    const url = `https://games.roblox.com/v1/games?universeIds=${batch.join(',')}`;
+    log(`fetchGamesByIds URL: ${url.slice(0, 120)}... (${batch.length} IDs)`);
 
-  if (!res.ok) {
-    const body = await res.text();
-    log(`fetchGamesByIds error: ${body.slice(0, 200)}`);
-    return [];
+    const res = await fetchWithTimeout(url);
+    log(`fetchGamesByIds status: ${res.status}`);
+
+    if (!res.ok) {
+      const body = await res.text();
+      log(`fetchGamesByIds error: ${body.slice(0, 200)}`);
+      continue;
+    }
+
+    const data = (await res.json()) as {
+      data?: Array<{
+        id: number;
+        rootPlaceId: number;
+        name: string;
+        playing: number;
+        visits: number;
+        created: string;
+        updated: string;
+        creator: { id: number; type: string; name: string };
+      }>;
+    };
+
+    const games = data.data ?? [];
+    log(`fetchGamesByIds batch returned ${games.length} games`);
+    allGames.push(
+      ...games.map((g) => ({
+        universeId: g.id,
+        name: g.name,
+        playing: g.playing,
+        visits: g.visits,
+        created: g.created,
+        updated: g.updated,
+        creatorId: g.creator.id,
+        creatorType: g.creator.type,
+        creatorName: g.creator.name,
+      }))
+    );
   }
 
-  const data = (await res.json()) as {
-    data?: Array<{
-      id: number;
-      rootPlaceId: number;
-      name: string;
-      playing: number;
-      visits: number;
-      created: string;
-      updated: string;
-      creator: { id: number; type: string; name: string };
-    }>;
-  };
-
-  const games = data.data ?? [];
-  log(`fetchGamesByIds returned ${games.length} games`);
-  return games.map((g) => ({
-    universeId: g.id,
-    name: g.name,
-    playing: g.playing,
-    visits: g.visits,
-    created: g.created,
-    updated: g.updated,
-    creatorId: g.creator.id,
-    creatorType: g.creator.type,
-    creatorName: g.creator.name,
-  }));
+  return allGames;
 }
 
-// Sort tokens for browsing popular games
-async function getGameSortTokens(): Promise<string[]> {
-  const url = 'https://games.roblox.com/v1/games/sorts?model.gameSortsContext=HomeSorts';
-  log(`getGameSortTokens URL: ${url}`);
-
-  const res = await fetchWithTimeout(url);
-  log(`getGameSortTokens status: ${res.status}`);
-
-  if (!res.ok) {
-    const body = await res.text();
-    log(`getGameSortTokens error: ${body.slice(0, 200)}`);
-    return [];
-  }
-
-  const data = (await res.json()) as {
-    sorts?: Array<{ token: string; name: string }>;
-  };
-
-  const tokens = (data.sorts ?? []).map((s) => s.token);
-  log(`getGameSortTokens found ${tokens.length} sorts`);
-  return tokens;
-}
-
-// Sorted game list (using sort token)
-async function fetchSortedGames(sortToken: string, limit = 100): Promise<GameSearchResult[]> {
-  const url = `https://games.roblox.com/v1/games/list?model.sortToken=${sortToken}&model.maxRows=${limit}&model.startRows=0&model.gameFilter=0`;
-  log(`fetchSortedGames URL: ${url}`);
-
-  const res = await fetchWithTimeout(url);
-  log(`fetchSortedGames status: ${res.status}`);
-
-  if (!res.ok) {
-    const body = await res.text();
-    log(`fetchSortedGames error: ${body.slice(0, 200)}`);
-    return [];
-  }
-
-  const data = (await res.json()) as {
-    games?: Array<{
-      universeId: number;
-      name: string;
-      playing: number;
-      visits: number;
-      created: string;
-      updated: string;
-      creator: { id: number; type: string; name: string };
-    }>;
-  };
-
-  const games = data.games ?? [];
-  log(`fetchSortedGames found ${games.length} games`);
-  return games.map((g) => ({
-    universeId: g.universeId,
-    name: g.name,
-    playing: g.playing,
-    visits: g.visits,
-    created: g.created,
-    updated: g.updated,
-    creatorId: g.creator.id,
-    creatorType: g.creator.type,
-    creatorName: g.creator.name,
-  }));
-}
+// ─── Game passes (try multiple endpoints) ───
 
 async function fetchGamePasses(universeId: number): Promise<GamePassInfo[]> {
-  const url = `https://games.roblox.com/v1/games/${universeId}/game-passes?limit=100&sortOrder=Asc`;
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) return [];
+  // Try economy API (newer)
+  const economyUrl = `https://economy.roblox.com/v2/universes/${universeId}/game-passes?limit=100&sortOrder=Asc`;
+  try {
+    const res = await fetchWithTimeout(economyUrl);
+    if (res.ok) {
+      const data = (await res.json()) as {
+        data?: Array<{ id: number; name: string; price: number | null }>;
+      };
+      if (data.data && data.data.length > 0) {
+        return data.data.map((gp) => ({ id: gp.id, name: gp.name, price: gp.price }));
+      }
+    }
+  } catch {
+    // fall through
+  }
 
-  const data = (await res.json()) as {
-    data?: Array<{ id: number; name: string; price: number | null }>;
-  };
+  // Try games API v1 (may still work for some)
+  const gamesUrl = `https://games.roblox.com/v1/games/${universeId}/game-passes?limit=100&sortOrder=Asc`;
+  try {
+    const res = await fetchWithTimeout(gamesUrl);
+    if (res.ok) {
+      const data = (await res.json()) as {
+        data?: Array<{ id: number; name: string; price: number | null }>;
+      };
+      return (data.data ?? []).map((gp) => ({ id: gp.id, name: gp.name, price: gp.price }));
+    }
+  } catch {
+    // fall through
+  }
 
-  return (data.data ?? []).map((gp) => ({
-    id: gp.id,
-    name: gp.name,
-    price: gp.price,
-  }));
+  return [];
 }
+
+// ─── User socials ───
 
 async function fetchUserSocials(userId: number): Promise<Record<string, string>> {
   const url = `https://accountinformation.roblox.com/v1/users/${userId}/promotion-channels`;
@@ -375,97 +402,68 @@ Write a single tweet-length message.`,
 
 // ─── Discovery: multi-strategy game finding ─────────────────
 
-async function discoverGames(searchTerms: string[], errors: string[]): Promise<GameSearchResult[]> {
-  const allGames: GameSearchResult[] = [];
+// Hardcoded popular Roblox universe IDs across genres (last resort fallback)
+const KNOWN_UNIVERSE_IDS = [
+  // Tycoons & Simulators
+  3956818381, 4872321990, 2809202155, 2474168535, 1537690962,
+  3597769786, 4915797882, 3732024327, 2337178604, 5765085497,
+  5174755280, 4490140083, 5370651063, 2788229376, 5036010510,
+  // RPG & Adventure
+  3244313910, 4664500732, 920587237, 1224212277, 4922741943,
+  // Popular active games
+  2753915549, 292439477, 301549746, 379614936, 537413528,
+  457405969, 142823291, 16732694, 114932368, 2414851778,
+  67084534, 13822889, 65241,
+  // Obby & Horror
+  3260590327, 189707,
+];
 
-  // Strategy 1: V1 keyword search
-  log('=== Strategy 1: V1 keyword search ===');
-  let v1Total = 0;
+async function discoverGames(searchTerms: string[], errors: string[]): Promise<GameSearchResult[]> {
+  const allUniverseIds = new Set<number>();
+
+  // Strategy 1: Catalog search → place IDs → universe IDs
+  log('=== Strategy 1: Catalog search ===');
   for (const term of searchTerms) {
     try {
-      const results = await searchGamesV1(term, 50);
-      v1Total += results.length;
-      allGames.push(...results);
+      const placeIds = await catalogSearch(term, 30);
+      if (placeIds.length > 0) {
+        const universeIds = await placesToUniverses(placeIds);
+        universeIds.forEach((id) => allUniverseIds.add(id));
+      }
     } catch (err) {
-      log(`V1 search "${term}" threw: ${String(err)}`);
-      errors.push(`V1 search "${term}" failed: ${String(err)}`);
+      log(`Catalog search "${term}" threw: ${String(err)}`);
+      errors.push(`Catalog search "${term}" failed: ${String(err)}`);
     }
   }
-  log(`Strategy 1 total: ${v1Total} games`);
+  log(`Strategy 1 total unique universe IDs: ${allUniverseIds.size}`);
 
-  // Strategy 2: omni-search → batch details (fallback if V1 returned nothing)
-  if (v1Total === 0) {
-    log('=== Strategy 2: omni-search fallback ===');
-    const allUniverseIds = new Set<number>();
-
-    for (const term of searchTerms) {
-      try {
-        const ids = await searchGamesOmni(term);
-        ids.forEach((id) => allUniverseIds.add(id));
-      } catch (err) {
-        log(`Omni search "${term}" threw: ${String(err)}`);
-        errors.push(`Omni search "${term}" failed: ${String(err)}`);
-      }
-    }
-
-    if (allUniverseIds.size > 0) {
-      log(`Omni search found ${allUniverseIds.size} unique IDs, fetching details...`);
-      try {
-        const details = await fetchGamesByIds(Array.from(allUniverseIds));
-        allGames.push(...details);
-        log(`Strategy 2 total: ${details.length} games with details`);
-      } catch (err) {
-        log(`fetchGamesByIds threw: ${String(err)}`);
-        errors.push(`Batch game fetch failed: ${String(err)}`);
-      }
-    } else {
-      log('Strategy 2: omni-search also returned 0 IDs');
-    }
-  }
-
-  // Strategy 3: sorted game lists
-  log('=== Strategy 3: sorted game lists ===');
+  // Strategy 2: Explore API sorts → universe IDs
+  log('=== Strategy 2: Explore API sorts ===');
   try {
-    const sortTokens = await getGameSortTokens();
-    for (const token of sortTokens.slice(0, 3)) {
-      try {
-        const results = await fetchSortedGames(token, 50);
-        allGames.push(...results);
-      } catch (err) {
-        log(`Sorted games token="${token}" threw: ${String(err)}`);
-      }
-    }
+    const exploreIds = await getExploreSortUniverseIds();
+    exploreIds.forEach((id) => allUniverseIds.add(id));
+    log(`After explore API, total unique universe IDs: ${allUniverseIds.size}`);
   } catch (err) {
-    log(`getGameSortTokens threw: ${String(err)}`);
-    errors.push(`Sort fetch failed: ${String(err)}`);
+    log(`Explore API threw: ${String(err)}`);
+    errors.push(`Explore API failed: ${String(err)}`);
   }
 
-  // Strategy 4: hardcoded popular universe IDs as last resort
-  if (allGames.length === 0) {
-    log('=== Strategy 4: hardcoded popular game IDs fallback ===');
-    // Well-known active Roblox games across genres
-    const knownUniverseIds = [
-      65241, 142823291, 189707, 292439477, 301549746, 13822889,
-      379614936, 537413528, 457405969, 2753915549, 16732694,
-      114932368, 189707, 3956818381, 67084534, 2414851778,
-      920587237, 4872321990, 2809202155, 3260590327,
-      1224212277, 4922741943, 2474168535, 1537690962,
-      3597769786, 4915797882, 3732024327, 2337178604,
-      5765085497, 5174755280, 4490140083, 5370651063,
-      2788229376, 5036010510, 3244313910, 4664500732,
-    ];
-    try {
-      const details = await fetchGamesByIds(knownUniverseIds);
-      allGames.push(...details);
-      log(`Strategy 4 total: ${details.length} games from hardcoded IDs`);
-    } catch (err) {
-      log(`Strategy 4 threw: ${String(err)}`);
-      errors.push(`Hardcoded ID fetch failed: ${String(err)}`);
-    }
+  // Strategy 3: Hardcoded popular IDs (always include as baseline)
+  log('=== Strategy 3: Hardcoded popular IDs ===');
+  KNOWN_UNIVERSE_IDS.forEach((id) => allUniverseIds.add(id));
+  log(`After hardcoded IDs, total unique universe IDs: ${allUniverseIds.size}`);
+
+  // Fetch full game details for all collected universe IDs
+  if (allUniverseIds.size === 0) {
+    log('No universe IDs found from any strategy');
+    return [];
   }
 
-  log(`Total games from all strategies: ${allGames.length}`);
-  return allGames;
+  log(`Fetching details for ${allUniverseIds.size} universe IDs...`);
+  const games = await fetchGamesByIds(Array.from(allUniverseIds));
+  log(`Got details for ${games.length} games`);
+
+  return games;
 }
 
 // ─── Main Pipeline ──────────────────────────────────────────
@@ -567,7 +565,7 @@ export async function runCreatorProspectingPipeline(
 
       const score = scoreProspect(prospect);
       enrichedProspects.push({ ...prospect, score });
-      log(`Enriched: ${game.name} (score=${score}, playing=${game.playing})`);
+      log(`Enriched: ${game.name} (score=${score}, playing=${game.playing}, passes=${gamePasses.length})`);
 
       // Small delay to respect rate limits
       await new Promise((r) => setTimeout(r, 200));

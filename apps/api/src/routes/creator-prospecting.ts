@@ -30,14 +30,21 @@ creatorProspectingRouter.post('/', async (_req, res) => {
 // Diagnostic: test which Roblox API endpoints are reachable from Railway
 creatorProspectingRouter.get('/test-apis', async (_req, res) => {
   const urls = [
-    'https://games.roblox.com/v1/games?universeIds=1818',
-    'https://games.roblox.com/v1/games/list?model.keyword=tycoon&model.maxRows=10&model.startRows=0&model.gameFilter=0',
-    'https://games.roblox.com/v1/games/sorts?model.gameSortsContext=HomeSorts',
-    'https://games.roblox.com/v1/games/1818/game-passes?limit=10&sortOrder=Asc',
-    'https://apis.roblox.com/explore-api/v1/get-sorts?sessionId=test',
+    // CONFIRMED WORKING
+    'https://games.roblox.com/v1/games?universeIds=3956818381',
     'https://catalog.roblox.com/v1/search/items?category=Game&keyword=tycoon&limit=10',
-    'https://apis.roblox.com/search-api/omni-search?searchQuery=tycoon&pageType=all',
-    'https://develop.roblox.com/v1/universes?ids=1818',
+    'https://apis.roblox.com/explore-api/v1/get-sorts?sessionId=test',
+    // NEW: place → universe conversion
+    'https://apis.roblox.com/universes/v1/places/1818/universe',
+    // NEW: explore-api get-games
+    'https://apis.roblox.com/explore-api/v1/get-games?gameSetTypeId=23&gameSetTargetId=504&maxRows=10',
+    // NEW: economy game passes
+    'https://economy.roblox.com/v2/universes/3956818381/game-passes?limit=10&sortOrder=Asc',
+    // NEW: user socials
+    'https://accountinformation.roblox.com/v1/users/1/promotion-channels',
+    // CONFIRMED DEAD (kept for reference)
+    'https://games.roblox.com/v1/games/list?model.keyword=tycoon&model.maxRows=10&model.startRows=0&model.gameFilter=0',
+    'https://games.roblox.com/v1/games/3956818381/game-passes?limit=10&sortOrder=Asc',
   ];
 
   const results: Array<{ url: string; status: number | string; body: string }> = [];
