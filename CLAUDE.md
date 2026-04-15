@@ -418,6 +418,7 @@ export abstract class BaseAgent {
 | CommandExecutorAgent | `agents/command-executor.ts` | On natural language command | 2 |
 | CreatorProspectingAgent | `agents/creator-prospecting.ts` | Daily cron 5am UTC | 2 |
 | TwitterFollowAgent | `agents/twitter-follow.ts` | Daily cron 2pm UTC | 3 |
+| LinkedInGrowthAgent | `agents/linkedin-growth.ts` | Daily cron 3pm UTC | 3 |
 
 ---
 

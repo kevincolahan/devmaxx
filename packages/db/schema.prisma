@@ -340,9 +340,19 @@ model TwitterFollowLog {
   followedAt   DateTime  @default(now())
   unfollowedAt DateTime?
   followedBack Boolean   @default(false)
-  reason       String
+  reason       String?
+}
 
-  @@unique([userId, action, followedAt])
+model LinkedInGrowthLog {
+  id             String    @id @default(cuid())
+  profileId      String
+  profileName    String
+  action         String
+  postId         String?
+  commentDrafted String?
+  actionTaken    Boolean   @default(false)
+  actionAt       DateTime?
+  createdAt      DateTime  @default(now())
 }
 
 model KeyValue {
