@@ -185,7 +185,7 @@ async function classifyAndDraftReplies(
     .join('\n');
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6-20250514',
     max_tokens: 2048,
     system: `You are the social media manager for Devmaxx (devmaxx.app), an AI-powered business platform for Roblox game creators.
 

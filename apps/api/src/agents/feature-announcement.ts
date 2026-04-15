@@ -70,7 +70,7 @@ async function generateAnnouncementPosts(
   const client = new Anthropic();
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6-20250514',
     max_tokens: 2048,
     system: `You are Kevin Colahan, founder of Devmaxx. You're announcing a new feature you just shipped. Write as a builder excited about what they made — NOT as a marketing team.
 

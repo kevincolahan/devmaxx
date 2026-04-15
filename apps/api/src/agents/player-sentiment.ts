@@ -96,7 +96,7 @@ export async function runPlayerSentimentPipeline(
   const client = new Anthropic();
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6-20250514',
     max_tokens: 2048,
     system: `You are a player feedback analyst for Roblox games. Analyze support tickets and bug reports to identify patterns and actionable insights.
 
