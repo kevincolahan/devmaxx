@@ -96,22 +96,42 @@ async function postReply(
   text: string,
   inReplyToId: string
 ): Promise<{ success: boolean; tweetId?: string; error?: string }> {
-  console.log(`[XOutreach] Posting reply via Vercel proxy to ${inReplyToId} (${text.length} chars)`);
+  const url = `${VERCEL_BASE}/api/twitter/reply`;
+  const payload = { text, replyToTweetId: inReplyToId };
 
-  const res = await fetch(`${VERCEL_BASE}/api/twitter/reply`, {
-    method: 'POST',
-    headers: proxyHeaders(),
-    body: JSON.stringify({ text, replyToTweetId: inReplyToId }),
-  });
+  console.log(`[XOutreach] postReply() → POST ${url}`);
+  console.log(`[XOutreach] postReply() payload: ${JSON.stringify(payload)}`);
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: proxyHeaders(),
+      body: JSON.stringify(payload),
+    });
+  } catch (fetchErr) {
+    console.error(`[XOutreach] postReply() fetch exception:`, fetchErr);
+    return { success: false, error: `Fetch failed: ${String(fetchErr)}` };
+  }
+
+  const body = await res.text();
+  console.log(`[XOutreach] postReply() response: status=${res.status} body=${body.slice(0, 500)}`);
 
   if (!res.ok) {
-    const body = await res.text();
-    console.error(`[XOutreach] Reply proxy failed ${res.status}: ${body}`);
     return { success: false, error: `Reply proxy ${res.status}: ${body}` };
   }
 
-  const data = (await res.json()) as { success: boolean; tweetId?: string };
-  console.log(`[XOutreach] Reply posted: ${data.tweetId}`);
+  let data: { success?: boolean; tweetId?: string; error?: string };
+  try {
+    data = JSON.parse(body);
+  } catch {
+    return { success: false, error: `Invalid JSON response: ${body.slice(0, 200)}` };
+  }
+
+  if (!data.success) {
+    return { success: false, error: data.error ?? `Proxy returned success=false: ${body.slice(0, 200)}` };
+  }
+
   return { success: true, tweetId: data.tweetId };
 }
 
@@ -390,7 +410,10 @@ export async function runXOutreachPipeline(
     return result;
   }
 
-  console.log(`[XOutreach] Claude classified ${classified.length} tweets`);
+  console.log(`[XOutreach] Claude classified ${classified.length} tweets:`);
+  for (const item of classified) {
+    console.log(`[XOutreach]   tweet=${item.tweetId} category=${item.category} draft=${item.replyDraft ? `"${item.replyDraft.slice(0, 60)}..." (${item.replyDraft.length} chars)` : 'null'}`);
+  }
 
   // Step 4 & 5 — Post replies with safety checks
   const replyableCategories = new Set<OutreachCategory>([
@@ -402,7 +425,10 @@ export async function runXOutreachPipeline(
 
   for (const item of classified) {
     const match = eligibleTweets.find(({ tweet }) => tweet.id === item.tweetId);
-    if (!match) continue;
+    if (!match) {
+      console.log(`[XOutreach] Skipping ${item.tweetId} — no match in eligible tweets`);
+      continue;
+    }
 
     const { tweet, user } = match;
     const username = user.username;
@@ -423,42 +449,55 @@ export async function runXOutreachPipeline(
 
     // Skip categories that shouldn't get replies
     if (item.category === 'skip' || item.category === 'general_roblox') {
-      console.log(`[XOutreach] Skipping ${tweet.id} — category: ${item.category}`);
+      console.log(`[XOutreach] Skipping ${tweet.id} by @${username} — category: ${item.category}`);
       result.skipped++;
       continue;
     }
 
     // Must be replyable category with a draft
-    if (!replyableCategories.has(item.category) || !item.replyDraft) {
+    if (!replyableCategories.has(item.category)) {
+      console.log(`[XOutreach] Skipping ${tweet.id} by @${username} — category "${item.category}" not in replyable set`);
+      result.skipped++;
+      continue;
+    }
+    if (!item.replyDraft) {
+      console.log(`[XOutreach] Skipping ${tweet.id} by @${username} — no reply draft`);
       result.skipped++;
       continue;
     }
 
     // Enforce 280 char limit
     if (item.replyDraft.length > 280) {
-      console.log(`[XOutreach] Skipping reply to ${tweet.id} — draft exceeds 280 chars (${item.replyDraft.length})`);
+      console.log(`[XOutreach] Skipping reply to ${tweet.id} by @${username} — draft exceeds 280 chars (${item.replyDraft.length})`);
       result.skipped++;
       continue;
     }
 
     // Check daily limit again (in case we hit it during this batch)
     if (repliesToday >= 5) {
-      console.log(`[XOutreach] Daily limit reached — skipping remaining`);
+      console.log(`[XOutreach] Daily limit reached (${repliesToday}/5) — skipping @${username}`);
       result.skipped++;
       continue;
     }
 
     // Check for duplicate reply text
     if (previousReplies.includes(item.replyDraft)) {
-      console.log(`[XOutreach] Skipping reply to ${tweet.id} — duplicate text`);
+      console.log(`[XOutreach] Skipping reply to ${tweet.id} by @${username} — duplicate text`);
       result.skipped++;
       continue;
     }
 
     // Post the reply
     try {
-      console.log(`[XOutreach] Replying to @${username} (${item.category}): "${item.replyDraft.slice(0, 60)}..."`);
+      console.log(`[XOutreach] >>> POSTING REPLY to @${username} (${item.category})`);
+      console.log(`[XOutreach]     tweet_id: ${tweet.id}`);
+      console.log(`[XOutreach]     draft: "${item.replyDraft}"`);
+      console.log(`[XOutreach]     url: ${VERCEL_BASE}/api/twitter/reply`);
+      console.log(`[XOutreach]     CRON_SECRET set: ${CRON_SECRET ? 'yes' : 'NO — MISSING'} (${CRON_SECRET.length} chars)`);
+
       const replyResult = await postReply(item.replyDraft, tweet.id);
+
+      console.log(`[XOutreach]     result: success=${replyResult.success} tweetId=${replyResult.tweetId ?? 'none'} error=${replyResult.error ?? 'none'}`);
 
       if (replyResult.success) {
         const replyUrl = replyResult.tweetId
@@ -481,11 +520,11 @@ export async function runXOutreachPipeline(
 
         console.log(`[XOutreach] SUCCESS — replied to @${username}: ${replyUrl ?? replyResult.tweetId}`);
       } else {
-        console.error(`[XOutreach] Failed to reply to @${username}: ${replyResult.error}`);
+        console.error(`[XOutreach] FAILED to reply to @${username}: ${replyResult.error}`);
         result.errors.push(`Reply to @${username} failed: ${replyResult.error}`);
       }
     } catch (err) {
-      console.error(`[XOutreach] Error replying to @${username}:`, err);
+      console.error(`[XOutreach] EXCEPTION replying to @${username}:`, err);
       result.errors.push(`Reply to @${username} error: ${String(err)}`);
     }
   }

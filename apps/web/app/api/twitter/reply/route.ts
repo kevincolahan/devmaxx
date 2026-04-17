@@ -73,14 +73,23 @@ export async function POST(req: NextRequest) {
   // Auth: CRON_SECRET bearer token only
   const authHeader = req.headers.get('authorization') || '';
   const cronSecret = (process.env.CRON_SECRET || '').trim();
+  console.log(`[twitter/reply] Auth check — cronSecret set: ${cronSecret ? 'yes' : 'NO'} (${cronSecret.length} chars), authHeader: "${authHeader.slice(0, 20)}..." (${authHeader.length} chars)`);
+
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    console.error(`[twitter/reply] AUTH FAILED — cronSecret empty: ${!cronSecret}, match: ${authHeader === `Bearer ${cronSecret}`}`);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { text, replyToTweetId } = (await req.json()) as {
-    text?: string;
-    replyToTweetId?: string;
-  };
+  let body: { text?: string; replyToTweetId?: string };
+  try {
+    body = await req.json();
+  } catch (parseErr) {
+    console.error(`[twitter/reply] Failed to parse request body:`, parseErr);
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+  }
+
+  const { text, replyToTweetId } = body;
+  console.log(`[twitter/reply] Request — text: "${(text ?? '').slice(0, 60)}..." (${(text ?? '').length} chars), replyToTweetId: ${replyToTweetId}`);
 
   if (!text || !replyToTweetId) {
     return NextResponse.json({ error: 'text and replyToTweetId are required' }, { status: 400 });
@@ -96,14 +105,29 @@ export async function POST(req: NextRequest) {
   const accessSecret = (process.env.TWITTER_ACCESS_SECRET || '').trim();
 
   if (!apiKey || !apiSecret || !accessToken || !accessSecret) {
-    return NextResponse.json({ error: 'Missing Twitter credentials' }, { status: 503 });
+    const missing = [
+      !apiKey && 'TWITTER_API_KEY',
+      !apiSecret && 'TWITTER_API_SECRET',
+      !accessToken && 'TWITTER_ACCESS_TOKEN',
+      !accessSecret && 'TWITTER_ACCESS_SECRET',
+    ].filter(Boolean);
+    console.error(`[twitter/reply] Missing credentials: ${missing.join(', ')}`);
+    return NextResponse.json({ error: `Missing Twitter credentials: ${missing.join(', ')}` }, { status: 503 });
   }
+
+  console.log(`[twitter/reply] Credentials loaded — apiKey: ${apiKey.length}ch, apiSecret: ${apiSecret.length}ch, accessToken: ${accessToken.length}ch, accessSecret: ${accessSecret.length}ch`);
 
   try {
     const twitterUrl = 'https://api.twitter.com/2/tweets';
     const authorization = buildAuthorizationHeader('POST', twitterUrl, apiKey, apiSecret, accessToken, accessSecret);
 
-    console.log(`[twitter/reply] Replying to ${replyToTweetId} (${text.length} chars)`);
+    const twitterPayload = {
+      text,
+      reply: { in_reply_to_tweet_id: replyToTweetId },
+    };
+
+    console.log(`[twitter/reply] Calling Twitter API — POST ${twitterUrl}`);
+    console.log(`[twitter/reply] Payload: ${JSON.stringify(twitterPayload)}`);
 
     const response = await fetch(twitterUrl, {
       method: 'POST',
@@ -111,32 +135,30 @@ export async function POST(req: NextRequest) {
         Authorization: authorization,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        text,
-        reply: { in_reply_to_tweet_id: replyToTweetId },
-      }),
+      body: JSON.stringify(twitterPayload),
     });
 
-    const body = await response.text();
+    const responseBody = await response.text();
+    console.log(`[twitter/reply] Twitter API response: status=${response.status} body=${responseBody.slice(0, 500)}`);
 
     if (!response.ok) {
-      console.error(`[twitter/reply] Twitter API ${response.status}:`, body);
-      return NextResponse.json({ error: `Twitter API ${response.status}: ${body}` }, { status: 502 });
+      return NextResponse.json({ error: `Twitter API ${response.status}: ${responseBody}` }, { status: 502 });
     }
 
-    const data = JSON.parse(body) as { data?: { id: string; text: string } };
+    const data = JSON.parse(responseBody) as { data?: { id: string; text: string } };
     const tweetId = data.data?.id;
 
     if (!tweetId) {
-      return NextResponse.json({ error: `Unexpected response: ${body}` }, { status: 502 });
+      console.error(`[twitter/reply] No tweet ID in response: ${responseBody}`);
+      return NextResponse.json({ error: `Unexpected response: ${responseBody}` }, { status: 502 });
     }
 
     const replyUrl = `https://x.com/devmaxxapp/status/${tweetId}`;
-    console.log(`[twitter/reply] Success — ${replyUrl}`);
+    console.log(`[twitter/reply] SUCCESS — ${replyUrl}`);
 
     return NextResponse.json({ success: true, tweetId, replyUrl });
   } catch (err) {
-    console.error('[twitter/reply] Error:', err);
+    console.error('[twitter/reply] Exception:', err);
     return NextResponse.json({ error: `Failed: ${String(err)}` }, { status: 502 });
   }
 }
