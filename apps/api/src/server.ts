@@ -26,6 +26,10 @@ import { announcementsRouter } from './routes/announcements';
 import { creatorProspectingRouter } from './routes/creator-prospecting';
 import { creatorEnrichmentRouter } from './routes/creator-enrichment';
 import { linkedInGrowthRouter } from './routes/linkedin-growth';
+import { youtubeOutreachRouter } from './routes/youtube-outreach';
+import { mentionsResponseRouter } from './routes/mentions-response';
+import { xOutreachRouter } from './routes/x-outreach';
+import { twitterFollowRouter } from './routes/twitter-follow';
 import { startScheduler } from './cron/scheduler';
 import { autoAnnounceFeatures } from './agents/feature-announcement';
 import { readFileSync } from 'fs';
@@ -63,6 +67,10 @@ app.use('/api/announcements', announcementsRouter);
 app.use('/api/agents/creator-prospecting', creatorProspectingRouter);
 app.use('/api/agents/creator-enrichment', creatorEnrichmentRouter);
 app.use('/api/agents/linkedin-growth', linkedInGrowthRouter);
+app.use('/api/agents/youtube-outreach', youtubeOutreachRouter);
+app.use('/api/agents/mentions-response', mentionsResponseRouter);
+app.use('/api/agents/x-outreach', xOutreachRouter);
+app.use('/api/agents/twitter-follow', twitterFollowRouter);
 
 async function startup() {
   // Verify DB connection before accepting traffic
