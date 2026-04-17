@@ -22,9 +22,7 @@ import { PrismaClient } from '@prisma/client';
  * Connection requests may need additional approval — gracefully skipped.
  */
 
-const VERCEL_BASE = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : process.env.NEXT_PUBLIC_APP_URL || 'https://devmaxx.app';
+const VERCEL_BASE = 'https://www.devmaxx.app';
 const CRON_SECRET = (process.env.CRON_SECRET || '').trim();
 const LINKEDIN_ACCESS_TOKEN = (process.env.LINKEDIN_ACCESS_TOKEN || '').trim();
 
