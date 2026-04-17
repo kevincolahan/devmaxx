@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
+import { SidebarNav, type NavSection } from '@/components/sidebar-nav';
+import { DashboardHeader } from '@/components/dashboard-header';
 import { CreatorHud } from '@/components/creator-hud';
 import { HealthScoreCard } from '@/components/health-score-card';
 import { DauChart } from '@/components/dau-chart';
@@ -208,11 +210,62 @@ interface DashboardClientProps {
   userEmail: string;
 }
 
-type Tab = 'overview' | 'commands' | 'pricing' | 'support' | 'content' | 'mentions' | 'community' | 'brief' | 'recommendations' | 'referrals' | 'ask' | 'prospects';
+/* ── Empty State ── */
+function EmptyState({ icon, title, description, action }: {
+  icon: string;
+  title: string;
+  description: string;
+  action?: { label: string; href: string };
+}) {
+  return (
+    <div className="flex flex-col items-center justify-center rounded-xl border border-[rgba(79,70,229,0.15)] bg-[#0F0F1E] px-6 py-16 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#141428] text-2xl">
+        {icon}
+      </div>
+      <h3 className="mt-4 text-base font-semibold text-white">{title}</h3>
+      <p className="mt-2 max-w-sm text-sm text-gray-500">{description}</p>
+      {action && (
+        <a
+          href={action.href}
+          className="mt-4 inline-block rounded-lg bg-indigo-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+        >
+          {action.label}
+        </a>
+      )}
+    </div>
+  );
+}
+
+/* ── Stat Card ── */
+function StatCard({ label, value, sub, color }: {
+  label: string;
+  value: string;
+  sub?: string;
+  color: string;
+}) {
+  return (
+    <div className="rounded-xl border border-[rgba(79,70,229,0.15)] bg-[#0F0F1E] p-4">
+      <div className="text-xs font-medium text-gray-500">{label}</div>
+      <div className={`mt-1 text-2xl font-bold ${color}`}>{value}</div>
+      {sub && <div className="mt-0.5 text-xs text-gray-600">{sub}</div>}
+    </div>
+  );
+}
+
+/* ── Page Title ── */
+function PageTitle({ title, description }: { title: string; description?: string }) {
+  return (
+    <div className="mb-6">
+      <h1 className="text-xl font-bold text-white sm:text-2xl">{title}</h1>
+      {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+    </div>
+  );
+}
 
 export function DashboardClient({ data, userEmail }: DashboardClientProps) {
   const { creator, games, recentRuns, recommendations, contentPieces, mentions, sentiment, events, forecast, communityLastPost, communityPostHistory, lastBrief, referral, stats } = data;
-  const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [activeSection, setActiveSection] = useState<NavSection>('overview');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const searchParams = useSearchParams();
   const [showUpgradeMessage, setShowUpgradeMessage] = useState(false);
   const [milestone, setMilestone] = useState<{
@@ -249,23 +302,19 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
   const escalatedCount = allTickets.filter((t) => t.status === 'escalated').length;
   const draftContentCount = contentPieces.filter((c) => c.status === 'draft').length;
 
-  const tabs: { key: Tab; label: string; count?: number }[] = [
-    { key: 'overview', label: 'Overview' },
-    { key: 'commands', label: 'Commands' },
-    { key: 'ask', label: 'Ask Devmaxx' },
-    { key: 'pricing', label: 'Pricing', count: allPriceTests.filter((t) => t.status === 'running').length },
-    { key: 'support', label: 'Support', count: escalatedCount },
-    { key: 'content', label: 'Content', count: draftContentCount },
-    { key: 'mentions', label: 'Mentions', count: mentions.filter((m) => m.category === 'negative').length },
-    { key: 'community', label: 'Community' },
-    { key: 'brief', label: 'Growth Brief' },
-    { key: 'recommendations', label: 'Recs', count: recommendations.length },
-    { key: 'referrals', label: 'Referrals', count: referral.referralCredits },
-    ...(creator?.email === 'kevin@devmaxx.app' ? [{ key: 'prospects' as const, label: 'Prospects' }] : []),
-  ];
+  const counts = {
+    pricingActive: allPriceTests.filter((t) => t.status === 'running').length,
+    supportEscalated: escalatedCount,
+    contentDraft: draftContentCount,
+    mentionsNegative: mentions.filter((m) => m.category === 'negative').length,
+    recommendations: recommendations.length,
+    referralCredits: referral.referralCredits,
+  };
+
+  const isAdmin = userEmail === 'kevin@devmaxx.app';
 
   return (
-    <main className="mx-auto max-w-6xl px-4 py-12">
+    <div className="min-h-screen bg-[#080810]">
       {/* Milestone toast */}
       {milestone && (
         <MilestoneToast
@@ -277,285 +326,489 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
         />
       )}
 
-      {/* Creator HUD — replaces old header + stats row */}
-      {creator && (
-        <CreatorHud
-          displayName={creator.robloxDisplayName}
-          email={creator.email}
-          xp={creator.xp}
-          level={creator.level}
-          levelTitle={creator.levelTitle}
-          plan={creator.plan}
-          totalGames={stats.totalGames}
-          totalRuns={stats.totalRuns}
-          totalRobuxImpact={stats.totalRobuxImpact}
-        />
-      )}
+      {/* Sidebar */}
+      <SidebarNav
+        active={activeSection}
+        onNavigate={setActiveSection}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        creator={creator ? {
+          displayName: creator.robloxDisplayName,
+          email: creator.email,
+          xp: creator.xp,
+          level: creator.level,
+          levelTitle: creator.levelTitle,
+          plan: creator.plan,
+        } : null}
+        counts={counts}
+        isAdmin={isAdmin}
+      />
 
-      {/* Upgrade success message */}
-      {showUpgradeMessage && creator && (
-        <div className="mt-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
-          <p className="text-lg font-semibold text-emerald-400">
-            Welcome to the {creator.plan.charAt(0).toUpperCase() + creator.plan.slice(1)} plan!
-          </p>
-          <p className="mt-1 text-sm text-emerald-300/70">
-            All agents are now active. Your games are being optimized.
-          </p>
-        </div>
-      )}
+      {/* Header */}
+      <DashboardHeader
+        gameName={games[0]?.name ?? null}
+        plan={creator?.plan ?? 'free'}
+        email={userEmail}
+        sidebarCollapsed={sidebarCollapsed}
+      />
 
-      {/* Autopilot + Connect Roblox */}
-      <div className="mt-6 grid gap-6 md:grid-cols-2">
-        <ConnectRobloxButton
-          isConnected={!!creator?.robloxUserId}
-          robloxUserId={creator?.robloxUserId ?? null}
-          robloxUsername={creator?.robloxUsername ?? null}
-          robloxDisplayName={creator?.robloxDisplayName ?? null}
-          hasApiKey={creator?.hasApiKey ?? false}
-        />
-        {creator && (
-          <AutopilotToggle
-            creatorId={creator.id}
-            initialValue={creator.autopilot}
-            plan={creator.plan}
-          />
-        )}
-      </div>
+      {/* Main content */}
+      <main
+        className={`min-h-screen pt-14 pb-20 transition-all duration-300 lg:pb-8 ${
+          sidebarCollapsed ? 'lg:pl-[60px]' : 'lg:pl-[240px]'
+        }`}
+      >
+        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
 
-      {/* Tab navigation */}
-      <div className="mt-6 flex gap-1 overflow-x-auto rounded-lg border border-gray-800 bg-gray-900/50 p-1">
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`flex shrink-0 items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition ${
-              activeTab === tab.key
-                ? 'bg-gray-800 text-white'
-                : 'text-gray-400 hover:text-gray-200'
-            }`}
-          >
-            {tab.label}
-            {tab.count !== undefined && tab.count > 0 && (
-              <span className="rounded-full bg-brand-500/20 px-1.5 py-0.5 text-xs text-brand-400">
-                {tab.count}
-              </span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* Tab content */}
-      {activeTab === 'overview' && (
-        <>
-          {games.length > 0 && (
-            <div className="mt-8">
-              <h2 className="mb-4 text-xl font-semibold">Game Health</h2>
-              <div className="grid gap-6 md:grid-cols-2">
-                {games.map((game) => (
-                  <HealthScoreCard
-                    key={game.id}
-                    gameName={game.name}
-                    score={game.healthScore}
-                    robloxGameId={game.robloxGameId}
-                    latestSnapshot={game.snapshots[0] ?? null}
-                    prevSnapshot={game.snapshots[1] ?? null}
-                  />
-                ))}
-              </div>
+          {/* Upgrade success message */}
+          {showUpgradeMessage && creator && (
+            <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
+              <p className="text-lg font-semibold text-emerald-400">
+                Welcome to the {creator.plan.charAt(0).toUpperCase() + creator.plan.slice(1)} plan!
+              </p>
+              <p className="mt-1 text-sm text-emerald-300/70">
+                All agents are now active. Your games are being optimized.
+              </p>
             </div>
           )}
-          {/* Revenue Forecast + Event Impact */}
-          <div className="mt-8 grid gap-6 md:grid-cols-2">
-            {creator?.plan === 'free' ? (
-              <UpgradePrompt
-                feature="Revenue Forecasting"
-                benefit="See your full revenue range with upside, downside, and seasonal projections."
-                requiredPlan="creator"
-                currentPlan={creator.plan}
-                variant="blur"
-              >
-                <RevenueForecastCard forecast={forecast as any} />
-              </UpgradePrompt>
-            ) : (
-              <RevenueForecastCard forecast={forecast as any} />
-            )}
-            <EventImpactTimeline events={events} />
-          </div>
 
-          {games.length > 0 && (
-            <div className="mt-8 space-y-6">
-              {games.map((game) => (
-                <DauChart
-                  key={game.id}
-                  gameName={game.name}
-                  snapshots={game.snapshots}
+          {/* ═══════════════ OVERVIEW ═══════════════ */}
+          {activeSection === 'overview' && (
+            <>
+              <PageTitle title="Command Center" description="Your game studio at a glance" />
+
+              {/* Stat cards */}
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <StatCard
+                  label="Game Health"
+                  value={games[0] ? `${games[0].healthScore}/100` : '--'}
+                  sub={games[0]?.name}
+                  color="text-emerald-400"
                 />
-              ))}
-            </div>
-          )}
-          <div className="mt-8">
-            <AgentRunFeed runs={recentRuns} />
-          </div>
-          <div className="mt-6 text-center">
-            <a
-              href="/devex-calculator"
-              className="text-sm text-gray-500 transition hover:text-indigo-400"
-            >
-              See full DevEx projection &rarr;
-            </a>
-          </div>
-        </>
-      )}
+                <StatCard
+                  label="Agent Runs"
+                  value={stats.totalRuns.toLocaleString()}
+                  sub="all time"
+                  color="text-indigo-400"
+                />
+                <StatCard
+                  label="Robux Impact"
+                  value={`${(stats.totalRobuxImpact ?? 0).toLocaleString()} R$`}
+                  sub="estimated value"
+                  color="text-yellow-400"
+                />
+                <StatCard
+                  label="Content Queue"
+                  value={`${draftContentCount} drafts`}
+                  sub="ready to publish"
+                  color="text-pink-400"
+                />
+              </div>
 
-      {activeTab === 'commands' && creator && (
-        <div className="mt-8">
-          {creator.plan === 'free' && (
-            <div className="mb-4">
-              <UpgradePrompt
-                feature="Game Commands"
-                benefit="Execute game commands automatically — run sales, update prices, generate content with plain English."
-                requiredPlan="creator"
-                currentPlan={creator.plan}
-                variant="banner"
+              {/* Connect Roblox + Autopilot row */}
+              <div className="mt-6 grid gap-4 md:grid-cols-2">
+                <ConnectRobloxButton
+                  isConnected={!!creator?.robloxUserId}
+                  robloxUserId={creator?.robloxUserId ?? null}
+                  robloxUsername={creator?.robloxUsername ?? null}
+                  robloxDisplayName={creator?.robloxDisplayName ?? null}
+                  hasApiKey={creator?.hasApiKey ?? false}
+                />
+                {creator && (
+                  <AutopilotToggle
+                    creatorId={creator.id}
+                    initialValue={creator.autopilot}
+                    plan={creator.plan}
+                  />
+                )}
+              </div>
+
+              {/* Two column layout */}
+              <div className="mt-6 grid gap-6 lg:grid-cols-5">
+                {/* LEFT — 60% */}
+                <div className="space-y-6 lg:col-span-3">
+                  {games.length > 0 && games.map((game) => (
+                    <DauChart
+                      key={game.id}
+                      gameName={game.name}
+                      snapshots={game.snapshots}
+                    />
+                  ))}
+                  <AgentRunFeed runs={recentRuns.slice(0, 5)} />
+                  {creator?.plan !== 'free' ? (
+                    <RevenueForecastCard forecast={forecast as any} />
+                  ) : (
+                    <UpgradePrompt
+                      feature="Revenue Forecasting"
+                      benefit="See your full revenue range with upside, downside, and seasonal projections."
+                      requiredPlan="creator"
+                      currentPlan={creator?.plan ?? 'free'}
+                      variant="blur"
+                    >
+                      <RevenueForecastCard forecast={forecast as any} />
+                    </UpgradePrompt>
+                  )}
+                </div>
+
+                {/* RIGHT — 40% */}
+                <div className="space-y-6 lg:col-span-2">
+                  {games.length > 0 && games.map((game) => (
+                    <HealthScoreCard
+                      key={game.id}
+                      gameName={game.name}
+                      score={game.healthScore}
+                      robloxGameId={game.robloxGameId}
+                      latestSnapshot={game.snapshots[0] ?? null}
+                      prevSnapshot={game.snapshots[1] ?? null}
+                    />
+                  ))}
+                  {games.length === 0 && (
+                    <EmptyState
+                      icon="\uD83C\uDFAE"
+                      title="No game connected"
+                      description="Connect your Roblox game to unlock all agents and analytics."
+                    />
+                  )}
+                  <EventImpactTimeline events={events} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ═══════════════ COMMANDS ═══════════════ */}
+          {activeSection === 'commands' && (
+            <>
+              <PageTitle title="Game Commands" description="Control your game with natural language" />
+              {creator?.plan === 'free' && (
+                <div className="mb-4">
+                  <UpgradePrompt
+                    feature="Game Commands"
+                    benefit="Execute game commands automatically -- run sales, update prices, generate content with plain English."
+                    requiredPlan="creator"
+                    currentPlan={creator.plan}
+                    variant="banner"
+                  />
+                </div>
+              )}
+              {creator && (
+                <div className="rounded-xl border border-[rgba(79,70,229,0.15)] bg-[#0F0F1E]">
+                  <CommandConsole creatorId={creator.id} gameId={games[0]?.id} />
+                </div>
+              )}
+            </>
+          )}
+
+          {/* ═══════════════ ASK DEVMAXX ═══════════════ */}
+          {activeSection === 'ask' && (
+            <>
+              <PageTitle title="Ask Devmaxx" description="AI-powered insights about your game" />
+              <div className="rounded-xl border border-[rgba(79,70,229,0.15)] bg-[#0F0F1E]">
+                <InsightsChat hasGames={games.length > 0} />
+              </div>
+            </>
+          )}
+
+          {/* ═══════════════ GAME HEALTH ═══════════════ */}
+          {activeSection === 'health' && (
+            <>
+              <PageTitle title="Game Health" description="Real-time health scores for your games" />
+              {games.length > 0 ? (
+                <div className="grid gap-6 md:grid-cols-2">
+                  {games.map((game) => (
+                    <HealthScoreCard
+                      key={game.id}
+                      gameName={game.name}
+                      score={game.healthScore}
+                      robloxGameId={game.robloxGameId}
+                      latestSnapshot={game.snapshots[0] ?? null}
+                      prevSnapshot={game.snapshots[1] ?? null}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon="\uD83D\uDC9A"
+                  title="No health data yet"
+                  description="Connect your Roblox game to start tracking health scores."
+                />
+              )}
+            </>
+          )}
+
+          {/* ═══════════════ METRICS & DAU ═══════════════ */}
+          {activeSection === 'metrics' && (
+            <>
+              <PageTitle title="Metrics & DAU" description="Player engagement trends over time" />
+              {games.length > 0 ? (
+                <div className="space-y-6">
+                  {games.map((game) => (
+                    <DauChart
+                      key={game.id}
+                      gameName={game.name}
+                      snapshots={game.snapshots}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  icon="\uD83D\uDCCA"
+                  title="No metrics yet"
+                  description="Connect your game to see DAU, retention, and revenue charts."
+                />
+              )}
+            </>
+          )}
+
+          {/* ═══════════════ REVENUE FORECAST ═══════════════ */}
+          {activeSection === 'forecast' && (
+            <>
+              <PageTitle title="Revenue Forecast" description="Projected Robux earnings and DevEx" />
+              {creator?.plan === 'free' ? (
+                <UpgradePrompt
+                  feature="Revenue Forecasting"
+                  benefit="See your full revenue range with upside, downside, and seasonal projections."
+                  requiredPlan="creator"
+                  currentPlan={creator.plan}
+                  variant="blur"
+                >
+                  <RevenueForecastCard forecast={forecast as any} />
+                </UpgradePrompt>
+              ) : (
+                <RevenueForecastCard forecast={forecast as any} />
+              )}
+            </>
+          )}
+
+          {/* ═══════════════ COMPETITOR INTEL ═══════════════ */}
+          {activeSection === 'competitors' && (
+            <>
+              <PageTitle title="Competitor Intel" description="Track rival games and market movements" />
+              <EmptyState
+                icon="\uD83D\uDD0D"
+                title="Competitor tracking active"
+                description="Your CompetitorIntelligenceAgent runs daily at 8am UTC. Data appears in your Growth Brief."
               />
-            </div>
+            </>
           )}
-          <CommandConsole creatorId={creator.id} gameId={games[0]?.id} />
-        </div>
-      )}
 
-      {activeTab === 'ask' && (
-        <div className="mt-8">
-          <InsightsChat hasGames={games.length > 0} />
-        </div>
-      )}
-
-      {activeTab === 'pricing' && (
-        <div className="mt-8 space-y-6">
-          {creator?.plan === 'free' ? (
-            <UpgradePrompt
-              feature="Pricing Optimization"
-              benefit="Your pricing agent found opportunities — upgrade to see and execute them automatically."
-              requiredPlan="creator"
-              currentPlan={creator.plan}
-              variant="blur"
-            >
-              <PricingTestsTable tests={allPriceTests} creatorId={creator?.id} gameId={games[0]?.id} />
-            </UpgradePrompt>
-          ) : (
-            <PricingTestsTable tests={allPriceTests} creatorId={creator?.id} gameId={games[0]?.id} />
+          {/* ═══════════════ AGENT LOG ═══════════════ */}
+          {activeSection === 'agent-log' && (
+            <>
+              <PageTitle title="Agent Quest Log" description="History of all agent actions" />
+              {recentRuns.length > 0 ? (
+                <AgentRunFeed runs={recentRuns} />
+              ) : (
+                <EmptyState
+                  icon="\uD83E\uDD16"
+                  title="No agent runs yet"
+                  description="Connect your game to start running AI agents automatically."
+                />
+              )}
+            </>
           )}
-        </div>
-      )}
 
-      {activeTab === 'support' && (
-        <div className="mt-8 space-y-6">
-          <SentimentAnalysis sentiment={sentiment as any} />
-          <SupportTicketsList tickets={allTickets} />
-        </div>
-      )}
-
-      {activeTab === 'content' && (
-        <div className="mt-8 space-y-6">
-          <ContentQueue items={contentPieces} />
-        </div>
-      )}
-
-      {activeTab === 'mentions' && (
-        <div className="mt-8 space-y-6">
-          {creator?.plan === 'free' ? (
-            <UpgradePrompt
-              feature="AI Mention Responses"
-              benefit="Auto-respond to mentions with AI-drafted replies. Never miss an opportunity to engage."
-              requiredPlan="creator"
-              currentPlan={creator.plan}
-              variant="blur"
-            >
-              <MentionsFeed mentions={mentions} />
-            </UpgradePrompt>
-          ) : (
-            <MentionsFeed mentions={mentions} />
+          {/* ═══════════════ PRICING ═══════════════ */}
+          {activeSection === 'pricing' && (
+            <>
+              <PageTitle title="Pricing Optimization" description="A/B test item prices for maximum revenue" />
+              {creator?.plan === 'free' ? (
+                <UpgradePrompt
+                  feature="Pricing Optimization"
+                  benefit="Your pricing agent found opportunities -- upgrade to see and execute them automatically."
+                  requiredPlan="creator"
+                  currentPlan={creator.plan}
+                  variant="blur"
+                >
+                  <PricingTestsTable tests={allPriceTests} creatorId={creator?.id} gameId={games[0]?.id} />
+                </UpgradePrompt>
+              ) : (
+                <PricingTestsTable tests={allPriceTests} creatorId={creator?.id} gameId={games[0]?.id} />
+              )}
+            </>
           )}
-          <div className="mt-8">
-            <h2 className="mb-4 text-lg font-semibold text-white">Outreach</h2>
-            <XOutreachFeed />
-          </div>
-        </div>
-      )}
 
-      {activeTab === 'community' && (
-        <div className="mt-8 space-y-6">
-          <CommunityOutreach
-            lastPost={communityLastPost as any}
-            postHistory={communityPostHistory}
-          />
-          <div className="mt-8">
-            <h2 className="mb-4 text-lg font-semibold text-white">YouTube</h2>
-            <YouTubeOutreachFeed />
-          </div>
-        </div>
-      )}
+          {/* ═══════════════ SUPPORT ═══════════════ */}
+          {activeSection === 'support' && (
+            <>
+              <PageTitle title="Player Support" description="Tickets and automated responses" />
+              <SupportTicketsList tickets={allTickets} />
+            </>
+          )}
 
-      {activeTab === 'brief' && (
-        <div className="mt-8">
-          {creator?.plan === 'free' ? (
-            <UpgradePrompt
-              feature="Full Growth Brief"
-              benefit="Read your complete weekly business brief with actionable recommendations, revenue analysis, and growth opportunities."
-              requiredPlan="creator"
-              currentPlan={creator.plan}
-              variant="blur"
-              urgency="Your competitors are reading theirs every Sunday."
-            >
-              <GrowthBriefPreview
-                brief={lastBrief?.data as any}
-                sentAt={lastBrief?.sentAt ?? null}
-                creatorId={creator?.id}
-                gameId={games[0]?.id}
+          {/* ═══════════════ SENTIMENT ═══════════════ */}
+          {activeSection === 'sentiment' && (
+            <>
+              <PageTitle title="Player Sentiment" description="What players are saying about your game" />
+              <SentimentAnalysis sentiment={sentiment as any} />
+            </>
+          )}
+
+          {/* ═══════════════ CONTENT QUEUE ═══════════════ */}
+          {activeSection === 'content' && (
+            <>
+              <PageTitle title="Content Queue" description="Social posts, announcements, and marketing content" />
+              <ContentQueue items={contentPieces} />
+            </>
+          )}
+
+          {/* ═══════════════ MENTIONS ═══════════════ */}
+          {activeSection === 'mentions' && (
+            <>
+              <PageTitle title="Mentions & Outreach" description="Social media mentions and engagement" />
+              {creator?.plan === 'free' ? (
+                <UpgradePrompt
+                  feature="AI Mention Responses"
+                  benefit="Auto-respond to mentions with AI-drafted replies. Never miss an opportunity to engage."
+                  requiredPlan="creator"
+                  currentPlan={creator.plan}
+                  variant="blur"
+                >
+                  <MentionsFeed mentions={mentions} />
+                </UpgradePrompt>
+              ) : (
+                <MentionsFeed mentions={mentions} />
+              )}
+              <div className="mt-8">
+                <h2 className="mb-4 text-lg font-semibold text-white">X Outreach</h2>
+                <XOutreachFeed />
+              </div>
+            </>
+          )}
+
+          {/* ═══════════════ COMMUNITY ═══════════════ */}
+          {activeSection === 'community' && (
+            <>
+              <PageTitle title="Community" description="Reddit, DevForum, and YouTube outreach" />
+              <CommunityOutreach
+                lastPost={communityLastPost as any}
+                postHistory={communityPostHistory}
               />
-            </UpgradePrompt>
-          ) : (
-            <GrowthBriefPreview
-              brief={lastBrief?.data as any}
-              sentAt={lastBrief?.sentAt ?? null}
-              creatorId={creator?.id}
-              gameId={games[0]?.id}
-            />
+              <div className="mt-8">
+                <h2 className="mb-4 text-lg font-semibold text-white">YouTube Outreach</h2>
+                <YouTubeOutreachFeed />
+              </div>
+            </>
           )}
-        </div>
-      )}
 
-      {activeTab === 'recommendations' && (
-        <div className="mt-8 space-y-6">
-          {creator?.plan === 'free' && (
-            <UpgradePrompt
-              feature="One-Click Actions"
-              benefit="Execute agent recommendations with a single click. Pricing changes, content updates, and more — all automated."
-              requiredPlan="creator"
-              currentPlan={creator.plan}
-              variant="inline"
-              urgency="Creators using one-click actions save 5+ hours per week."
-            />
+          {/* ═══════════════ REFERRALS ═══════════════ */}
+          {activeSection === 'referrals' && (
+            <>
+              <PageTitle title="Referrals" description="Earn credits by inviting other creators" />
+              <ReferralPanel
+                referralCode={referral.referralCode}
+                referralCredits={referral.referralCredits}
+                referrals={referral.referrals}
+              />
+            </>
           )}
-          <RecommendationsPanel recommendations={recommendations} creatorId={creator?.id ?? ''} gameId={games[0]?.id} />
-        </div>
-      )}
 
-      {activeTab === 'referrals' && (
-        <div className="mt-8 space-y-6">
-          <ReferralPanel
-            referralCode={referral.referralCode}
-            referralCredits={referral.referralCredits}
-            referrals={referral.referrals}
-          />
-        </div>
-      )}
+          {/* ═══════════════ GROWTH BRIEF ═══════════════ */}
+          {activeSection === 'brief' && (
+            <>
+              <PageTitle title="Growth Brief" description="Your weekly business intelligence report" />
+              {creator?.plan === 'free' ? (
+                <UpgradePrompt
+                  feature="Full Growth Brief"
+                  benefit="Read your complete weekly business brief with actionable recommendations."
+                  requiredPlan="creator"
+                  currentPlan={creator.plan}
+                  variant="blur"
+                  urgency="Your competitors are reading theirs every Sunday."
+                >
+                  <GrowthBriefPreview
+                    brief={lastBrief?.data as any}
+                    sentAt={lastBrief?.sentAt ?? null}
+                    creatorId={creator?.id}
+                    gameId={games[0]?.id}
+                  />
+                </UpgradePrompt>
+              ) : (
+                <GrowthBriefPreview
+                  brief={lastBrief?.data as any}
+                  sentAt={lastBrief?.sentAt ?? null}
+                  creatorId={creator?.id}
+                  gameId={games[0]?.id}
+                />
+              )}
+            </>
+          )}
 
-      {activeTab === 'prospects' && (
-        <div className="mt-8">
-          <ProspectsTab />
+          {/* ═══════════════ RECOMMENDATIONS ═══════════════ */}
+          {activeSection === 'recommendations' && (
+            <>
+              <PageTitle title="Recommendations" description="AI-generated actions to grow your game" />
+              {creator?.plan === 'free' && (
+                <div className="mb-4">
+                  <UpgradePrompt
+                    feature="One-Click Actions"
+                    benefit="Execute agent recommendations with a single click."
+                    requiredPlan="creator"
+                    currentPlan={creator.plan}
+                    variant="inline"
+                    urgency="Creators using one-click actions save 5+ hours per week."
+                  />
+                </div>
+              )}
+              <RecommendationsPanel recommendations={recommendations} creatorId={creator?.id ?? ''} gameId={games[0]?.id} />
+            </>
+          )}
+
+          {/* ═══════════════ EVENTS ═══════════════ */}
+          {activeSection === 'events' && (
+            <>
+              <PageTitle title="Event Impact" description="How game updates affect your metrics" />
+              <EventImpactTimeline events={events} />
+            </>
+          )}
+
+          {/* ═══════════════ SETTINGS / ACCOUNT ═══════════════ */}
+          {activeSection === 'account' && (
+            <>
+              <PageTitle title="Settings" description="Account and billing management" />
+              <div className="space-y-6">
+                {creator && (
+                  <CreatorHud
+                    displayName={creator.robloxDisplayName}
+                    email={creator.email}
+                    xp={creator.xp}
+                    level={creator.level}
+                    levelTitle={creator.levelTitle}
+                    plan={creator.plan}
+                    totalGames={stats.totalGames}
+                    totalRuns={stats.totalRuns}
+                    totalRobuxImpact={stats.totalRobuxImpact}
+                  />
+                )}
+                <div className="grid gap-4 md:grid-cols-2">
+                  <ConnectRobloxButton
+                    isConnected={!!creator?.robloxUserId}
+                    robloxUserId={creator?.robloxUserId ?? null}
+                    robloxUsername={creator?.robloxUsername ?? null}
+                    robloxDisplayName={creator?.robloxDisplayName ?? null}
+                    hasApiKey={creator?.hasApiKey ?? false}
+                  />
+                  {creator && (
+                    <AutopilotToggle
+                      creatorId={creator.id}
+                      initialValue={creator.autopilot}
+                      plan={creator.plan}
+                    />
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* ═══════════════ PROSPECTS (admin) ═══════════════ */}
+          {activeSection === 'prospects' && isAdmin && (
+            <>
+              <PageTitle title="Prospects" description="Creator prospecting pipeline (admin only)" />
+              <ProspectsTab />
+            </>
+          )}
+
         </div>
-      )}
-    </main>
+      </main>
+    </div>
   );
 }

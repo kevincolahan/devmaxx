@@ -82,6 +82,30 @@
   animation: rank-glow 2s ease-in-out infinite;
 }
 
+/* ── Dashboard color system ── */
+
+:root {
+  --dash-page-bg: #080810;
+  --dash-sidebar: #0A0A16;
+  --dash-card: #0F0F1E;
+  --dash-card-elevated: #141428;
+  --dash-border: rgba(79, 70, 229, 0.15);
+  --dash-active: rgba(79, 70, 229, 0.1);
+  --dash-hover: rgba(79, 70, 229, 0.06);
+}
+
+/* Scrollbar styling for sidebar */
+.lg\:flex aside::-webkit-scrollbar {
+  width: 4px;
+}
+.lg\:flex aside::-webkit-scrollbar-track {
+  background: transparent;
+}
+.lg\:flex aside::-webkit-scrollbar-thumb {
+  background: rgba(79, 70, 229, 0.2);
+  border-radius: 2px;
+}
+
 /* Respect reduced motion */
 @media (prefers-reduced-motion: reduce) {
   .animate-blink,
