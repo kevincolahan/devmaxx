@@ -106,7 +106,7 @@ export async function runRevenueForecastPipeline(
   const client = new Anthropic();
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-5-20241022',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2048,
     system: `You are a revenue analyst for Roblox games. Generate a revenue forecast based on historical metrics, trends, and seasonal factors.
 

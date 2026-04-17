@@ -270,7 +270,7 @@ Respond ONLY with valid JSON:
     article: ScoredArticle
   ): Promise<ContentGenerationOutput> {
     const response = await this.client.messages.create({
-      model: 'claude-sonnet-4-5-20241022',
+      model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: `You are a content strategist for Devmaxx (devmaxx.app), an AI platform for Roblox game creators.
 
