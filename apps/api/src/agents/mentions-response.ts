@@ -1,68 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaClient } from '@prisma/client';
-import { createHmac, randomBytes } from 'crypto';
 
-// ─── OAuth 1.0a for Twitter API ─────────────────────────────
+// ─── Vercel Proxy Config ────────────────────────────────────
 
-function percentEncode(str: string): string {
-  return encodeURIComponent(str)
-    .replace(/!/g, '%21')
-    .replace(/\*/g, '%2A')
-    .replace(/'/g, '%27')
-    .replace(/\(/g, '%28')
-    .replace(/\)/g, '%29');
-}
+const VERCEL_BASE = 'https://www.devmaxx.app';
+const CRON_SECRET = (process.env.CRON_SECRET || '').trim();
 
-function buildAuthorizationHeader(
-  method: string,
-  url: string,
-  queryParams: Record<string, string> = {}
-): string {
-  const apiKey = (process.env.TWITTER_API_KEY || '').trim();
-  const apiSecret = (process.env.TWITTER_API_SECRET || '').trim();
-  const accessToken = (process.env.TWITTER_ACCESS_TOKEN || '').trim();
-  const accessSecret = (process.env.TWITTER_ACCESS_SECRET || '').trim();
-
-  const oauthParams: Record<string, string> = {
-    oauth_consumer_key: apiKey,
-    oauth_nonce: randomBytes(32).toString('hex').slice(0, 32),
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-    oauth_token: accessToken,
-    oauth_version: '1.0',
+function proxyHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${CRON_SECRET}`,
   };
-
-  // For GET requests, include query params in signature base
-  const allParams = { ...oauthParams, ...queryParams };
-
-  const sortedParams = Object.keys(allParams)
-    .sort()
-    .map((key) => `${percentEncode(key)}=${percentEncode(allParams[key])}`)
-    .join('&');
-
-  const signatureBase = [
-    method.toUpperCase(),
-    percentEncode(url),
-    percentEncode(sortedParams),
-  ].join('&');
-
-  const signingKey = `${percentEncode(apiSecret)}&${percentEncode(accessSecret)}`;
-
-  const signature = createHmac('sha1', signingKey)
-    .update(signatureBase)
-    .digest('base64');
-
-  oauthParams.oauth_signature = signature;
-
-  const headerParts = Object.keys(oauthParams)
-    .sort()
-    .map((key) => `${percentEncode(key)}="${percentEncode(oauthParams[key])}"`)
-    .join(', ');
-
-  return `OAuth ${headerParts}`;
 }
 
-// ─── Twitter API helpers ────────────────────────────────────
+// ─── Twitter API helpers (via Vercel proxy) ─────────────────
 
 interface TwitterMention {
   id: string;
@@ -79,92 +30,47 @@ interface TwitterUser {
   };
 }
 
-async function getTwitterUserId(): Promise<string> {
-  const userId = (process.env.TWITTER_USER_ID || '').trim();
-  if (userId) return userId;
-
-  // Look up by username
-  const url = 'https://api.twitter.com/2/users/by/username/devmaxxapp';
-  const auth = buildAuthorizationHeader('GET', url);
-
-  const res = await fetch(url, {
-    headers: { Authorization: auth },
-  });
-
-  if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Failed to look up Twitter user: ${res.status} ${body}`);
-  }
-
-  const data = (await res.json()) as { data?: { id: string } };
-  if (!data.data?.id) throw new Error('Twitter user lookup returned no data');
-
-  console.log(`[MentionsAgent] Resolved @devmaxxapp → user ID: ${data.data.id}`);
-  return data.data.id;
-}
-
 async function fetchMentions(
-  userId: string,
   sinceId?: string
-): Promise<{ mentions: TwitterMention[]; users: TwitterUser[] }> {
-  const baseUrl = `https://api.twitter.com/2/users/${userId}/mentions`;
-  const params: Record<string, string> = {
-    max_results: '20',
-    'tweet.fields': 'created_at,author_id',
-    'user.fields': 'username,public_metrics',
-    expansions: 'author_id',
-  };
-  if (sinceId) params.since_id = sinceId;
+): Promise<{ userId: string; mentions: TwitterMention[]; users: TwitterUser[] }> {
+  const params = new URLSearchParams();
+  if (sinceId) params.set('since_id', sinceId);
 
-  const queryString = Object.entries(params)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join('&');
+  const url = `${VERCEL_BASE}/api/twitter/mentions${params.toString() ? `?${params}` : ''}`;
+  console.log(`[MentionsAgent] Fetching mentions via Vercel proxy`);
 
-  const auth = buildAuthorizationHeader('GET', baseUrl, params);
-
-  const res = await fetch(`${baseUrl}?${queryString}`, {
-    headers: { Authorization: auth },
-  });
+  const res = await fetch(url, { headers: proxyHeaders() });
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Twitter mentions API ${res.status}: ${body}`);
+    throw new Error(`Mentions proxy ${res.status}: ${body}`);
   }
 
   const data = (await res.json()) as {
-    data?: TwitterMention[];
-    includes?: { users?: TwitterUser[] };
+    userId: string;
+    mentions: TwitterMention[];
+    users: TwitterUser[];
   };
 
-  return {
-    mentions: data.data ?? [],
-    users: data.includes?.users ?? [],
-  };
+  return data;
 }
 
 async function postReply(text: string, inReplyToId: string): Promise<{ success: boolean; tweetId?: string; error?: string }> {
-  const url = 'https://api.twitter.com/2/tweets';
-  const auth = buildAuthorizationHeader('POST', url);
+  console.log(`[MentionsAgent] Posting reply via Vercel proxy to ${inReplyToId}`);
 
-  const res = await fetch(url, {
+  const res = await fetch(`${VERCEL_BASE}/api/twitter/reply`, {
     method: 'POST',
-    headers: {
-      Authorization: auth,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text,
-      reply: { in_reply_to_tweet_id: inReplyToId },
-    }),
+    headers: proxyHeaders(),
+    body: JSON.stringify({ text, replyToTweetId: inReplyToId }),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    return { success: false, error: `Twitter API ${res.status}: ${body}` };
+    return { success: false, error: `Reply proxy ${res.status}: ${body}` };
   }
 
-  const data = (await res.json()) as { data?: { id: string } };
-  return { success: true, tweetId: data.data?.id };
+  const data = (await res.json()) as { success: boolean; tweetId?: string };
+  return { success: true, tweetId: data.tweetId };
 }
 
 // ─── Claude classification + reply drafting ─────────────────
@@ -248,24 +154,15 @@ export async function runMentionsResponsePipeline(
 }> {
   console.log('[MentionsAgent] Starting mentions scan');
 
-  // Get Twitter user ID
-  let userId: string;
-  try {
-    userId = await getTwitterUserId();
-  } catch (err) {
-    console.error('[MentionsAgent] Failed to get user ID:', err);
-    return { mentionsProcessed: 0, repliesPosted: 0, flaggedNegative: 0 };
-  }
-
   // Get last processed mention ID
   const lastIdRow = await db.keyValue.findUnique({ where: { key: 'last_mention_id' } });
   const sinceId = lastIdRow?.value;
 
-  // Fetch new mentions
+  // Fetch new mentions via Vercel proxy
   let mentions: TwitterMention[];
   let users: TwitterUser[];
   try {
-    const result = await fetchMentions(userId, sinceId);
+    const result = await fetchMentions(sinceId);
     mentions = result.mentions;
     users = result.users;
   } catch (err) {

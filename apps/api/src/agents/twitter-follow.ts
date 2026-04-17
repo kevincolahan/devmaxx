@@ -25,9 +25,7 @@ import { PrismaClient } from '@prisma/client';
  * tier, falls back to following accounts from ProspectList.
  */
 
-const VERCEL_BASE = process.env.VERCEL_URL
-  ? `https://${process.env.VERCEL_URL}`
-  : process.env.NEXT_PUBLIC_APP_URL || 'https://devmaxx.app';
+const VERCEL_BASE = 'https://www.devmaxx.app';
 const CRON_SECRET = (process.env.CRON_SECRET || '').trim();
 const TWITTER_USER_ID = (process.env.TWITTER_USER_ID || '').trim();
 
@@ -77,7 +75,7 @@ interface TwitterUser {
 async function searchRecentTweets(query: string): Promise<TwitterUser[]> {
   // This endpoint may need Basic tier ($100/mo). If it returns 403,
   // we fall back to ProspectList-based following.
-  const url = `${VERCEL_BASE}/api/social/twitter-search?query=${encodeURIComponent(query)}`;
+  const url = `${VERCEL_BASE}/api/twitter/search?query=${encodeURIComponent(query)}`;
   try {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${CRON_SECRET}` },

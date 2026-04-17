@@ -1,64 +1,16 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaClient } from '@prisma/client';
-import { createHmac, randomBytes } from 'crypto';
 
-// ─── OAuth 1.0a for Twitter API ─────────────────────────────
+// ─── Vercel Proxy Config ────────────────────────────────────
 
-function percentEncode(str: string): string {
-  return encodeURIComponent(str)
-    .replace(/!/g, '%21')
-    .replace(/\*/g, '%2A')
-    .replace(/'/g, '%27')
-    .replace(/\(/g, '%28')
-    .replace(/\)/g, '%29');
-}
+const VERCEL_BASE = 'https://www.devmaxx.app';
+const CRON_SECRET = (process.env.CRON_SECRET || '').trim();
 
-function buildOAuthHeader(
-  method: string,
-  url: string,
-  queryParams: Record<string, string> = {}
-): string {
-  const apiKey = (process.env.TWITTER_API_KEY || '').trim();
-  const apiSecret = (process.env.TWITTER_API_SECRET || '').trim();
-  const accessToken = (process.env.TWITTER_ACCESS_TOKEN || '').trim();
-  const accessSecret = (process.env.TWITTER_ACCESS_SECRET || '').trim();
-
-  const oauthParams: Record<string, string> = {
-    oauth_consumer_key: apiKey,
-    oauth_nonce: randomBytes(32).toString('hex').slice(0, 32),
-    oauth_signature_method: 'HMAC-SHA1',
-    oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-    oauth_token: accessToken,
-    oauth_version: '1.0',
+function proxyHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${CRON_SECRET}`,
   };
-
-  const allParams = { ...oauthParams, ...queryParams };
-
-  const sortedParams = Object.keys(allParams)
-    .sort()
-    .map((key) => `${percentEncode(key)}=${percentEncode(allParams[key])}`)
-    .join('&');
-
-  const signatureBase = [
-    method.toUpperCase(),
-    percentEncode(url),
-    percentEncode(sortedParams),
-  ].join('&');
-
-  const signingKey = `${percentEncode(apiSecret)}&${percentEncode(accessSecret)}`;
-
-  const signature = createHmac('sha1', signingKey)
-    .update(signatureBase)
-    .digest('base64');
-
-  oauthParams.oauth_signature = signature;
-
-  const headerParts = Object.keys(oauthParams)
-    .sort()
-    .map((key) => `${percentEncode(key)}="${percentEncode(oauthParams[key])}"`)
-    .join(', ');
-
-  return `OAuth ${headerParts}`;
 }
 
 // ─── Types ──────────────────────────────────────────────────
@@ -100,88 +52,67 @@ interface ClassifiedTweet {
   replyDraft: string | null;
 }
 
-// ─── Twitter Search (Bearer Token) ──────────────────────────
+// ─── Twitter Search (via Vercel proxy) ──────────────────────
 
 async function searchRecentTweets(): Promise<{
   tweets: SearchTweet[];
   users: SearchUser[];
 }> {
-  const bearerToken = (process.env.TWITTER_BEARER_TOKEN || '').trim();
-  if (!bearerToken) {
-    throw new Error('TWITTER_BEARER_TOKEN is not set');
-  }
+  const query = '(roblox devex OR roblox monetization OR roblox analytics OR roblox game revenue OR roblox creator economy) -is:retweet -is:reply lang:en';
 
-  const baseUrl = 'https://api.twitter.com/2/tweets/search/recent';
-  const params: Record<string, string> = {
-    query:
-      '(roblox devex OR roblox monetization OR roblox analytics OR roblox game revenue OR roblox creator economy) -is:retweet -is:reply lang:en',
+  const params = new URLSearchParams({
+    query,
     max_results: '10',
-    'tweet.fields': 'author_id,created_at,public_metrics',
-    'user.fields': 'username,public_metrics',
-    expansions: 'author_id',
-  };
+  });
 
-  const queryString = Object.entries(params)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join('&');
+  console.log(`[XOutreach] Searching tweets via Vercel proxy`);
 
-  console.log(`[XOutreach] Searching tweets: ${baseUrl}?${queryString.slice(0, 100)}...`);
-
-  const res = await fetch(`${baseUrl}?${queryString}`, {
-    headers: { Authorization: `Bearer ${bearerToken}` },
+  const res = await fetch(`${VERCEL_BASE}/api/twitter/search?${params}`, {
+    headers: proxyHeaders(),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Twitter search API ${res.status}: ${body}`);
+    throw new Error(`Twitter search proxy ${res.status}: ${body}`);
   }
 
   const data = (await res.json()) as {
-    data?: SearchTweet[];
-    includes?: { users?: SearchUser[] };
+    tweets: SearchTweet[];
+    users: SearchUser[];
     meta?: { result_count: number };
   };
 
   console.log(`[XOutreach] Search returned ${data.meta?.result_count ?? 0} tweets`);
 
   return {
-    tweets: data.data ?? [],
-    users: data.includes?.users ?? [],
+    tweets: data.tweets ?? [],
+    users: data.users ?? [],
   };
 }
 
-// ─── Twitter Reply (OAuth 1.0a) ─────────────────────────────
+// ─── Twitter Reply (via Vercel proxy) ────────────────────────
 
 async function postReply(
   text: string,
   inReplyToId: string
 ): Promise<{ success: boolean; tweetId?: string; error?: string }> {
-  const url = 'https://api.twitter.com/2/tweets';
-  const auth = buildOAuthHeader('POST', url);
+  console.log(`[XOutreach] Posting reply via Vercel proxy to ${inReplyToId} (${text.length} chars)`);
 
-  console.log(`[XOutreach] Posting reply to ${inReplyToId} (${text.length} chars)`);
-
-  const res = await fetch(url, {
+  const res = await fetch(`${VERCEL_BASE}/api/twitter/reply`, {
     method: 'POST',
-    headers: {
-      Authorization: auth,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text,
-      reply: { in_reply_to_tweet_id: inReplyToId },
-    }),
+    headers: proxyHeaders(),
+    body: JSON.stringify({ text, replyToTweetId: inReplyToId }),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    console.error(`[XOutreach] Reply failed ${res.status}: ${body}`);
-    return { success: false, error: `Twitter API ${res.status}: ${body}` };
+    console.error(`[XOutreach] Reply proxy failed ${res.status}: ${body}`);
+    return { success: false, error: `Reply proxy ${res.status}: ${body}` };
   }
 
-  const data = (await res.json()) as { data?: { id: string } };
-  console.log(`[XOutreach] Reply posted: ${data.data?.id}`);
-  return { success: true, tweetId: data.data?.id };
+  const data = (await res.json()) as { success: boolean; tweetId?: string };
+  console.log(`[XOutreach] Reply posted: ${data.tweetId}`);
+  return { success: true, tweetId: data.tweetId };
 }
 
 // ─── Claude Classification + Reply Drafting ─────────────────
