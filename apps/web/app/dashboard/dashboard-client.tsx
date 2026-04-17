@@ -237,16 +237,17 @@ function EmptyState({ icon, title, description, action }: {
 }
 
 /* ── Stat Card ── */
-function StatCard({ label, value, sub, color }: {
+function StatCard({ label, value, sub, color, isZero }: {
   label: string;
   value: string;
   sub?: string;
   color: string;
+  isZero?: boolean;
 }) {
   return (
     <div className="rounded-xl border border-[rgba(79,70,229,0.15)] bg-[#0F0F1E] p-4">
       <div className="text-xs font-medium text-gray-500">{label}</div>
-      <div className={`mt-1 text-2xl font-bold ${color}`}>{value}</div>
+      <div className={`mt-1 text-3xl font-bold ${isZero ? 'text-gray-600' : color}`}>{value}</div>
       {sub && <div className="mt-0.5 text-xs text-gray-600">{sub}</div>}
     </div>
   );
@@ -384,24 +385,28 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
                   value={games[0] ? `${games[0].healthScore}/100` : '--'}
                   sub={games[0]?.name}
                   color="text-emerald-400"
+                  isZero={!games[0]}
                 />
                 <StatCard
                   label="Agent Runs"
                   value={stats.totalRuns.toLocaleString()}
                   sub="all time"
                   color="text-indigo-400"
+                  isZero={stats.totalRuns === 0}
                 />
                 <StatCard
                   label="Robux Impact"
                   value={`${(stats.totalRobuxImpact ?? 0).toLocaleString()} R$`}
                   sub="estimated value"
                   color="text-yellow-400"
+                  isZero={(stats.totalRobuxImpact ?? 0) === 0}
                 />
                 <StatCard
                   label="Content Queue"
                   value={`${draftContentCount} drafts`}
                   sub="ready to publish"
                   color="text-pink-400"
+                  isZero={draftContentCount === 0}
                 />
               </div>
 

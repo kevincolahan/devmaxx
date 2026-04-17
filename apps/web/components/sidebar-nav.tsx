@@ -179,7 +179,14 @@ export function SidebarNav({
       >
         {/* Logo + collapse toggle */}
         <div className="flex h-14 items-center justify-between border-b border-[rgba(79,70,229,0.1)] px-4">
-          {!collapsed && <span className="text-base font-bold text-white">Devmaxx</span>}
+          <div className="flex items-center gap-2">
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600/20">
+              <svg className="h-4 w-4 text-indigo-400" viewBox="0 0 24 24" fill="none" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+              </svg>
+            </div>
+            {!collapsed && <span className="text-base font-bold text-white">Devmaxx</span>}
+          </div>
           <button
             onClick={onToggleCollapse}
             className="flex h-7 w-7 items-center justify-center rounded-md text-gray-500 transition hover:bg-[rgba(79,70,229,0.1)] hover:text-gray-300"
@@ -221,11 +228,11 @@ export function SidebarNav({
         )}
 
         {/* Nav groups */}
-        <nav className="flex-1 overflow-y-auto px-2 py-3">
+        <nav className="sidebar-scroll flex-1 overflow-y-auto px-2 py-3">
           {groups.map((group) => (
             <div key={group.title} className="mb-4">
               {!collapsed && (
-                <div className="mb-1.5 px-2 text-[10px] font-semibold uppercase tracking-widest text-gray-600">
+                <div className="mb-1 px-2.5 text-[9px] font-medium uppercase tracking-[0.15em] text-gray-600/70">
                   {group.emoji} {group.title}
                 </div>
               )}
@@ -236,10 +243,10 @@ export function SidebarNav({
                     key={item.key}
                     onClick={() => onNavigate(item.key)}
                     title={collapsed ? item.label : undefined}
-                    className={`group relative mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition ${
+                    className={`group relative mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm transition-all duration-150 ${
                       isActive
-                        ? 'bg-[rgba(79,70,229,0.1)] text-white'
-                        : 'text-gray-400 hover:bg-[rgba(79,70,229,0.06)] hover:text-gray-200'
+                        ? 'bg-[rgba(79,70,229,0.12)] text-white'
+                        : 'text-gray-400 hover:bg-[rgba(79,70,229,0.08)] hover:text-gray-200 hover:translate-x-[1px]'
                     } ${collapsed ? 'justify-center' : ''}`}
                   >
                     {isActive && (
@@ -277,10 +284,10 @@ export function SidebarNav({
                 key={item.key}
                 onClick={() => onNavigate(item.key)}
                 title={collapsed ? item.label : undefined}
-                className={`group relative mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition ${
+                className={`group relative mb-0.5 flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm transition-all duration-150 ${
                   isActive
-                    ? 'bg-[rgba(79,70,229,0.1)] text-white'
-                    : 'text-gray-400 hover:bg-[rgba(79,70,229,0.06)] hover:text-gray-200'
+                    ? 'bg-[rgba(79,70,229,0.12)] text-white'
+                    : 'text-gray-400 hover:bg-[rgba(79,70,229,0.08)] hover:text-gray-200 hover:translate-x-[1px]'
                 } ${collapsed ? 'justify-center' : ''}`}
               >
                 {isActive && (

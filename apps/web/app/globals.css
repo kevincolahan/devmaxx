@@ -94,16 +94,13 @@
   --dash-hover: rgba(79, 70, 229, 0.06);
 }
 
-/* Scrollbar styling for sidebar */
-.lg\:flex aside::-webkit-scrollbar {
-  width: 4px;
+/* Hide sidebar scrollbar but keep scroll */
+.sidebar-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
-.lg\:flex aside::-webkit-scrollbar-track {
-  background: transparent;
-}
-.lg\:flex aside::-webkit-scrollbar-thumb {
-  background: rgba(79, 70, 229, 0.2);
-  border-radius: 2px;
+.sidebar-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 /* Respect reduced motion */
