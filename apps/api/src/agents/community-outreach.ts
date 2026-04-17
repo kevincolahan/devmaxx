@@ -170,7 +170,7 @@ async function generateOutreachContent(
     : '';
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-5-20251001',
+    model: 'claude-sonnet-4-5-20241022',
     max_tokens: 2048,
     system: `You are a community manager for Devmaxx (devmaxx.app), an AI-powered business platform for Roblox game creators.
 

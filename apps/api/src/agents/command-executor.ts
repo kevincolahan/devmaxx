@@ -43,7 +43,7 @@ export async function parseCommand(
   const client = new Anthropic();
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-5-20251001',
+    model: 'claude-sonnet-4-5-20241022',
     max_tokens: 2048,
     system: `You are Devmaxx's command interpreter for Roblox game management. Parse natural language commands into structured actions.
 

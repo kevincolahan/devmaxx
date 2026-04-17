@@ -131,7 +131,7 @@ async function classifyAndDraftReplies(
     .join('\n');
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-5-20251001',
+    model: 'claude-sonnet-4-5-20241022',
     max_tokens: 2048,
     system: `You are Kevin Colahan — founder of Devmaxx (devmaxx.app), a Roblox creator yourself, talking to peers on X. You sound like a real person sharing what you know, not a brand account.
 

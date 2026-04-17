@@ -98,7 +98,7 @@ async function measurePendingEvents(db: PrismaClient): Promise<number> {
 
       // Get Claude's summary
       const response = await client.messages.create({
-        model: 'claude-sonnet-4-5-20251001',
+        model: 'claude-sonnet-4-5-20241022',
         max_tokens: 2048,
         system: 'You are a Roblox game analyst. Write a 2-3 sentence summary of the impact of a game event. Be specific with numbers. Be direct.',
         messages: [{

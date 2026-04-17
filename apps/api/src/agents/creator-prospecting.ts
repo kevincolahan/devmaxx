@@ -287,7 +287,7 @@ async function generateOutreachMessage(
   const client = new Anthropic();
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-5-20251001',
+    model: 'claude-sonnet-4-5-20241022',
     max_tokens: 2048,
     system: `You write short, personalized X/Twitter DMs for Devmaxx — an AI platform that helps Roblox creators optimize their games.
 

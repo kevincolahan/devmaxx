@@ -30,7 +30,7 @@ export abstract class BaseAgent {
       const userPrompt = this.buildUserPrompt(context);
 
       const response = await this.client.messages.create({
-        model: 'claude-sonnet-4-5-20251001',
+        model: 'claude-sonnet-4-5-20241022',
         max_tokens: 2048,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],
