@@ -62,7 +62,7 @@ async function searchRecentTweets(): Promise<{
 
   const params = new URLSearchParams({
     query,
-    max_results: '10',
+    max_results: '50',
   });
 
   console.log(`[XOutreach] Searching tweets via Vercel proxy`);
@@ -283,8 +283,8 @@ export async function runXOutreachPipeline(
   }
 
   const userMap = new Map(users.map((u) => [u.id, u]));
-  const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000);
   const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   // Step 2 — Filter tweets
 
@@ -362,16 +362,16 @@ export async function runXOutreachPipeline(
       continue;
     }
 
-    // Skip: too old (>6 hours)
-    if (createdAt < sixHoursAgo) {
-      console.log(`[XOutreach] Skipping ${tweet.id} — older than 6 hours`);
+    // Skip: too old (>48 hours)
+    if (createdAt < fortyEightHoursAgo) {
+      console.log(`[XOutreach] Skipping ${tweet.id} — older than 48 hours`);
       result.skipped++;
       continue;
     }
 
-    // Skip: low followers (<5)
-    if (followers < 5) {
-      console.log(`[XOutreach] Skipping ${tweet.id} by @${username} — ${followers} followers (min 5)`);
+    // Skip: low followers (<1)
+    if (followers < 1) {
+      console.log(`[XOutreach] Skipping ${tweet.id} by @${username} — ${followers} followers (min 1)`);
       result.skipped++;
       continue;
     }
