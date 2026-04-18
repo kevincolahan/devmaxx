@@ -8,6 +8,7 @@ import {
   type ChatInputCommandInteraction,
 } from 'discord.js';
 import { PrismaClient } from '@prisma/client';
+import { randomBytes } from 'crypto';
 
 const DISCORD_BOT_TOKEN = (process.env.DISCORD_BOT_TOKEN || '').trim();
 const DISCORD_CLIENT_ID = (process.env.DISCORD_CLIENT_ID || '').trim();
@@ -200,28 +201,54 @@ async function handleBrief(interaction: ChatInputCommandInteraction, db: PrismaC
 }
 
 async function handleConnect(interaction: ChatInputCommandInteraction, db: PrismaClient) {
+  const guildId = interaction.guildId!;
+  const guildName = interaction.guild?.name ?? 'Unknown Server';
+
   // Save the guild info
   await db.discordServer.upsert({
-    where: { guildId: interaction.guildId! },
-    create: {
-      guildId: interaction.guildId!,
-      guildName: interaction.guild?.name ?? 'Unknown Server',
-      channelId: interaction.channelId,
-    },
-    update: {
-      guildName: interaction.guild?.name ?? 'Unknown Server',
-      channelId: interaction.channelId,
-    },
+    where: { guildId },
+    create: { guildId, guildName, channelId: interaction.channelId },
+    update: { guildName, channelId: interaction.channelId },
   });
+
+  // Check if already linked
+  const existing = await db.discordServer.findUnique({ where: { guildId } });
+  if (existing?.creatorId) {
+    const creator = await db.creator.findUnique({ where: { id: existing.creatorId } });
+    await interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0x4ade80)
+          .setTitle('Already Connected')
+          .setDescription(`This server is linked to **${creator?.robloxUsername ?? creator?.email ?? 'your account'}**.\n\nUse \`/devmaxx status\` to see your game data.`)
+          .setFooter({ text: 'Devmaxx - Maxx your DevEx' }),
+      ],
+      ephemeral: true,
+    });
+    return;
+  }
+
+  // Generate a link token
+  const token = randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+  await db.discordLinkToken.create({
+    data: { token, guildId, guildName, expiresAt },
+  });
+
+  const linkUrl = `https://devmaxx.app/discord/link?token=${token}&guildId=${guildId}`;
 
   const embed = new EmbedBuilder()
     .setColor(0x6366f1)
-    .setTitle('Connect Your Game')
+    .setTitle('Link Your Devmaxx Account')
     .setDescription(
-      'Link your Roblox game to Devmaxx to enable status updates, GrowthBriefs, and alerts in this server.\n\n' +
-      '**Step 1:** Sign in at [devmaxx.app/login](https://devmaxx.app/login)\n' +
-      '**Step 2:** Connect your Roblox account\n' +
-      '**Step 3:** Your game data will appear here with `/devmaxx status`'
+      `Click the link below to connect this Discord server to your Devmaxx account.\n\n` +
+      `**[Click here to link](${linkUrl})**\n\n` +
+      `This link expires in 15 minutes.\n\n` +
+      `Once linked, you can use:\n` +
+      `\u2022 \`/devmaxx status\` \u2014 see your game health\n` +
+      `\u2022 \`/devmaxx brief\` \u2014 latest GrowthBrief\n` +
+      `\u2022 \`/devmaxx alerts on\` \u2014 automatic alerts`
     )
     .setFooter({ text: 'Devmaxx - Maxx your DevEx' });
 

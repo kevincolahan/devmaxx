@@ -74,6 +74,7 @@ model Creator {
   referralCredits      Int        @default(0)
   onboardingStep       Int        @default(0)
   onboardingCompletedAt DateTime?
+  discordGuildId       String?
   games                Game[]
   agentRuns            AgentRun[]
   xpEvents             XPEvent[]
@@ -400,6 +401,15 @@ model DiscordServer {
   alertsOn  Boolean  @default(true)
   channelId String?
   addedAt   DateTime @default(now())
+}
+
+model DiscordLinkToken {
+  id        String    @id @default(cuid())
+  token     String    @unique
+  guildId   String
+  guildName String
+  expiresAt DateTime
+  usedAt    DateTime?
 }
 
 model CreatorOutreachQueue {
