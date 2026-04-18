@@ -29,6 +29,7 @@ import { UpgradePrompt } from '@/components/upgrade-prompt';
 import { MilestoneToast } from '@/components/milestone-toast';
 import { ProspectsTab } from '@/components/prospects-tab';
 import { OnboardingFlow, OnboardingBanner } from '@/components/onboarding-flow';
+import { PortfolioView } from '@/components/portfolio-view';
 
 interface Snapshot {
   date: string;
@@ -629,6 +630,31 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
                 icon="\uD83D\uDD0D"
                 title="Competitor tracking active"
                 description="Your CompetitorIntelligenceAgent runs daily at 8am UTC. Data appears in your Growth Brief."
+              />
+            </>
+          )}
+
+          {/* ═══════════════ PORTFOLIO ═══════════════ */}
+          {activeSection === 'portfolio' && (
+            <>
+              <PageTitle title="Portfolio" description="All your games at a glance" />
+              <PortfolioView
+                games={games.map((g) => ({
+                  id: g.id,
+                  name: g.name,
+                  robloxGameId: g.robloxGameId,
+                  healthScore: g.healthScore,
+                  snapshots: g.snapshots.map((s) => ({
+                    date: s.date,
+                    dau: s.dau,
+                    robuxEarned: s.robuxEarned,
+                    retentionD7: s.retentionD7,
+                    concurrentPeak: s.concurrentPeak,
+                  })),
+                  agentRunCount: recentRuns.filter((r) => r.agentName !== 'system').length,
+                }))}
+                plan={creator?.plan ?? 'free'}
+                totalRobuxImpact={stats.totalRobuxImpact}
               />
             </>
           )}
