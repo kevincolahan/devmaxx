@@ -4,25 +4,18 @@ import { PrismaClient } from '@prisma/client';
  * TwitterFollowAgent
  *
  * Organically grows @devmaxxapp's following by:
- *   1. Following relevant Roblox creator accounts (max 20/day)
- *   2. Following back new followers (max 10/day)
- *   3. Unfollowing non-followers after 7 days (max 10/day)
+ *   1. Following relevant Roblox creator accounts from ProspectList (max 20/day)
+ *   2. Unfollowing non-followers after 7 days (max 10/day)
  *
  * Runs: Daily 2pm UTC — 0 14 * * *
  *
  * Uses Twitter API v2 via Vercel proxy (Railway IPs are blocked).
- * All follow/unfollow calls go through:
- *   POST /api/social/twitter-follow
+ * Follow/unfollow calls go through:
+ *   POST https://www.devmaxx.app/api/social/twitter-follow
  *   { action: 'follow'|'unfollow', targetUserId }
  *
- * Twitter API Free tier limits:
- *   - POST /2/tweets (1,500/month)
- *   - POST /2/users/:id/following (user-context write)
- *   - GET /2/tweets/search/recent (read — may need Basic tier)
- *
- * Search for prospects is done via tweet search (recent tweets
- * mentioning Roblox dev topics). If search is blocked on Free
- * tier, falls back to following accounts from ProspectList.
+ * User ID lookups go through:
+ *   GET https://www.devmaxx.app/api/twitter/search?query=from:{handle}
  */
 
 const VERCEL_BASE = 'https://www.devmaxx.app';
@@ -33,17 +26,25 @@ function log(msg: string) {
   console.log(`[TwitterFollow] ${msg}`);
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // ─── Vercel Proxy Calls ─────────────────────────────────────
+
+function proxyHeaders(): Record<string, string> {
+  return {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${CRON_SECRET}`,
+  };
+}
 
 async function callFollowApi(action: 'follow' | 'unfollow', targetUserId: string): Promise<{ success: boolean; error?: string }> {
   const url = `${VERCEL_BASE}/api/social/twitter-follow`;
   try {
     const res = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${CRON_SECRET}`,
-      },
+      headers: proxyHeaders(),
       body: JSON.stringify({ action, targetUserId }),
     });
 
@@ -57,71 +58,50 @@ async function callFollowApi(action: 'follow' | 'unfollow', targetUserId: string
   }
 }
 
-// ─── Twitter Search via Vercel (tweets search requires Basic tier) ─
+// ─── Twitter User ID Lookup ─────────────────────────────────
 
-interface TwitterUser {
-  id: string;
-  username: string;
-  name: string;
-  public_metrics?: {
-    followers_count: number;
-    following_count: number;
-    tweet_count: number;
-  };
-  description?: string;
-  created_at?: string;
-}
+async function lookupTwitterUserId(handle: string): Promise<{ userId: string; username: string } | null> {
+  // Search for tweets from this user to get their user ID
+  const query = `from:${handle}`;
+  const url = `${VERCEL_BASE}/api/twitter/search?query=${encodeURIComponent(query)}&max_results=10`;
 
-async function searchRecentTweets(query: string): Promise<TwitterUser[]> {
-  // This endpoint may need Basic tier ($100/mo). If it returns 403,
-  // we fall back to ProspectList-based following.
-  const url = `${VERCEL_BASE}/api/twitter/search?query=${encodeURIComponent(query)}`;
   try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${CRON_SECRET}` },
-    });
+    const res = await fetch(url, { headers: proxyHeaders() });
     if (!res.ok) {
-      log(`Tweet search failed (${res.status}) — will use ProspectList fallback`);
-      return [];
+      log(`User lookup for @${handle} failed: HTTP ${res.status}`);
+      return null;
     }
-    const data = (await res.json()) as { users?: TwitterUser[] };
-    return data.users ?? [];
+
+    const data = (await res.json()) as {
+      tweets?: Array<{ author_id: string }>;
+      users?: Array<{ id: string; username: string }>;
+    };
+
+    // Check users array first (from expansions)
+    if (data.users && data.users.length > 0) {
+      const user = data.users.find((u) => u.username.toLowerCase() === handle.toLowerCase());
+      if (user) {
+        log(`Resolved @${handle} → user ID: ${user.id}`);
+        return { userId: user.id, username: user.username };
+      }
+      // Fall back to first user
+      log(`Resolved @${handle} → user ID: ${data.users[0].id} (first user)`);
+      return { userId: data.users[0].id, username: data.users[0].username };
+    }
+
+    // Fall back to author_id from tweets
+    if (data.tweets && data.tweets.length > 0) {
+      const authorId = data.tweets[0].author_id;
+      log(`Resolved @${handle} → author_id: ${authorId} (from tweet)`);
+      return { userId: authorId, username: handle };
+    }
+
+    log(`No results for @${handle} — account may be private or suspended`);
+    return null;
   } catch (err) {
-    log(`Tweet search error: ${String(err)}`);
-    return [];
+    log(`User lookup error for @${handle}: ${err}`);
+    return null;
   }
-}
-
-// ─── Follow Rules ───────────────────────────────────────────
-
-function isValidFollowTarget(user: TwitterUser): boolean {
-  const followers = user.public_metrics?.followers_count ?? 0;
-  const tweets = user.public_metrics?.tweet_count ?? 0;
-
-  // Never follow accounts with < 10 followers
-  if (followers < 10) return false;
-
-  // Never follow accounts with > 100K followers (won't follow back)
-  if (followers > 100_000) return false;
-
-  // Skip accounts that look like bots (very low tweet count)
-  if (tweets < 5) return false;
-
-  // Check if active in last 30 days (rough heuristic: has tweets)
-  if (tweets < 10) return false;
-
-  return true;
-}
-
-function isRobloxRelated(user: TwitterUser): boolean {
-  const bio = (user.description || '').toLowerCase();
-  const robloxKeywords = ['roblox', 'devex', 'robux', 'luau', 'rblx', 'bloxburg', 'studio'];
-  const creatorKeywords = ['developer', 'creator', 'studio', 'game dev', 'indie', 'gamedev'];
-
-  const hasRoblox = robloxKeywords.some((kw) => bio.includes(kw));
-  const hasCreator = creatorKeywords.some((kw) => bio.includes(kw));
-
-  return hasRoblox || (hasCreator && bio.includes('game'));
 }
 
 // ─── Main Pipeline ──────────────────────────────────────────
@@ -138,7 +118,7 @@ export async function runTwitterFollowPipeline(
 ): Promise<TwitterFollowResult> {
   const errors: string[] = [];
   let followed = 0;
-  let followedBack = 0;
+  const followedBack = 0;
   let unfollowed = 0;
 
   if (!TWITTER_USER_ID) {
@@ -154,14 +134,15 @@ export async function runTwitterFollowPipeline(
   // Get all accounts we've already followed (to avoid duplicates)
   const existingFollows = await db.twitterFollowLog.findMany({
     where: { action: { in: ['follow', 'followback'] } },
-    select: { userId: true },
+    select: { userId: true, username: true },
   });
   const alreadyFollowedIds = new Set(existingFollows.map((f) => f.userId));
+  const alreadyFollowedUsernames = new Set(existingFollows.map((f) => f.username.toLowerCase()));
   log(`Already followed ${alreadyFollowedIds.size} accounts total`);
 
-  // ─── PART 1: Follow relevant accounts (max 20/day) ────────
+  // ─── PART 1: Follow prospects with twitter handles (max 20/day) ─
 
-  log('=== Part 1: Follow relevant Roblox accounts ===');
+  log('=== Part 1: Follow prospects from ProspectList + Leaderboard ===');
 
   const MAX_FOLLOWS_PER_DAY = 20;
   const todayFollows = await db.twitterFollowLog.count({
@@ -174,104 +155,100 @@ export async function runTwitterFollowPipeline(
   log(`Follow budget today: ${followBudget} (already followed ${todayFollows} today)`);
 
   if (followBudget > 0) {
-    // Strategy A: Search tweets for Roblox dev content
-    const searchQueries = [
-      'roblox devex',
-      'roblox game dev',
-      'roblox developer studio',
-      'roblox creator earnings',
-    ];
+    // Get prospects with enriched twitter handles
+    const prospects = await db.prospectList.findMany({
+      where: {
+        twitterHandle: { not: null },
+      },
+      orderBy: { prospectScore: 'desc' },
+      take: 50,
+    });
 
-    const candidates: TwitterUser[] = [];
-    for (const query of searchQueries) {
-      const users = await searchRecentTweets(query);
-      candidates.push(...users);
-    }
+    // Also get leaderboard entries with twitter handles
+    const leaderboardEntries = await db.leaderboard.findMany({
+      where: {
+        twitterHandle: { not: null },
+      },
+      orderBy: { rank: 'asc' },
+      take: 50,
+    });
 
-    // Deduplicate and filter
-    const uniqueCandidates = new Map<string, TwitterUser>();
-    for (const user of candidates) {
-      if (!uniqueCandidates.has(user.id) && !alreadyFollowedIds.has(user.id)) {
-        if (isValidFollowTarget(user) && isRobloxRelated(user)) {
-          uniqueCandidates.set(user.id, user);
-        }
+    // Build candidate list: handle + source
+    const candidates: Array<{ handle: string; gameName: string; source: string }> = [];
+
+    for (const p of prospects) {
+      if (p.twitterHandle && p.twitterHandle.trim() !== '' && !alreadyFollowedUsernames.has(p.twitterHandle.toLowerCase())) {
+        candidates.push({ handle: p.twitterHandle, gameName: p.gameName, source: 'prospect' });
       }
     }
-    log(`Found ${uniqueCandidates.size} valid candidates from tweet search`);
 
-    // Strategy B: Fall back to ProspectList twitter handles
-    if (uniqueCandidates.size < followBudget) {
-      log('Supplementing with ProspectList twitter handles...');
-      const prospects = await db.prospectList.findMany({
-        where: {
-          socialLinks: { not: undefined },
-          outreachStatus: { in: ['queued', 'pending'] },
-        },
-        orderBy: { prospectScore: 'desc' },
-        take: 50,
-      });
-
-      for (const prospect of prospects) {
-        const socials = prospect.socialLinks as Record<string, string> | null;
-        if (socials?.twitter && !alreadyFollowedIds.has(socials.twitter)) {
-          // We don't have the Twitter user ID from ProspectList, just the handle.
-          // We'll store the handle as userId for now — the follow API needs an ID though.
-          // Skip ProspectList follows that don't have numeric IDs.
-          log(`ProspectList: ${prospect.gameName} has @${socials.twitter} but no user ID — skipping`);
+    for (const l of leaderboardEntries) {
+      if (l.twitterHandle && l.twitterHandle.trim() !== '' && !alreadyFollowedUsernames.has(l.twitterHandle.toLowerCase())) {
+        // Avoid duplicates from prospects
+        if (!candidates.some((c) => c.handle.toLowerCase() === l.twitterHandle!.toLowerCase())) {
+          candidates.push({ handle: l.twitterHandle, gameName: l.gameName, source: 'leaderboard' });
         }
       }
     }
 
-    // Execute follows
-    const toFollow = Array.from(uniqueCandidates.values()).slice(0, followBudget);
-    for (const user of toFollow) {
-      const result = await callFollowApi('follow', user.id);
+    log(`Found ${candidates.length} candidates with twitter handles (${prospects.length} prospects, ${leaderboardEntries.length} leaderboard entries checked)`);
+
+    // Resolve handles to user IDs and follow
+    let followsThisRun = 0;
+    for (const candidate of candidates) {
+      if (followsThisRun >= followBudget) {
+        log(`Follow budget exhausted (${followsThisRun}/${followBudget})`);
+        break;
+      }
+
+      log(`Looking up @${candidate.handle} (${candidate.gameName}, ${candidate.source})...`);
+      const lookup = await lookupTwitterUserId(candidate.handle);
+      await delay(1000);
+
+      if (!lookup) {
+        log(`  Could not resolve @${candidate.handle} — skipping`);
+        continue;
+      }
+
+      if (alreadyFollowedIds.has(lookup.userId)) {
+        log(`  @${candidate.handle} (ID: ${lookup.userId}) already followed — skipping`);
+        continue;
+      }
+
+      log(`  Following @${lookup.username} (ID: ${lookup.userId})...`);
+      const result = await callFollowApi('follow', lookup.userId);
+
       if (result.success) {
         await db.twitterFollowLog.create({
           data: {
-            userId: user.id,
-            username: user.username,
+            userId: lookup.userId,
+            username: lookup.username,
             action: 'follow',
-            reason: `Tweet search: bio="${(user.description || '').slice(0, 100)}", followers=${user.public_metrics?.followers_count ?? 0}`,
+            reason: `${candidate.source}: ${candidate.gameName}`,
           },
         });
         followed++;
-        alreadyFollowedIds.add(user.id);
-        log(`Followed @${user.username} (${user.public_metrics?.followers_count ?? 0} followers)`);
-
-        // Rate limit delay
-        await new Promise((r) => setTimeout(r, 2000));
+        followsThisRun++;
+        alreadyFollowedIds.add(lookup.userId);
+        alreadyFollowedUsernames.add(lookup.username.toLowerCase());
+        log(`  SUCCESS — followed @${lookup.username}`);
       } else {
-        errors.push(`Follow @${user.username} failed: ${result.error}`);
-        log(`Failed to follow @${user.username}: ${result.error}`);
+        // 403 on follow means the account restricts who can follow
+        if (result.error?.includes('403')) {
+          log(`  @${lookup.username} restricts follows — skipping`);
+        } else {
+          errors.push(`Follow @${lookup.username} failed: ${result.error}`);
+          log(`  FAILED: ${result.error}`);
+        }
       }
+
+      await delay(2000);
     }
   }
 
-  // ─── PART 2: Follow back new followers (max 10/day) ───────
+  // ─── PART 2: Follow back (skipped — requires Basic tier) ───
 
-  log('=== Part 2: Follow back new followers ===');
-
-  const MAX_FOLLOWBACKS_PER_DAY = 10;
-  const todayFollowbacks = await db.twitterFollowLog.count({
-    where: {
-      action: 'followback',
-      followedAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
-    },
-  });
-  const followbackBudget = Math.max(0, MAX_FOLLOWBACKS_PER_DAY - todayFollowbacks);
-  log(`Followback budget today: ${followbackBudget}`);
-
-  // Note: GET /2/users/:id/followers requires Basic tier.
-  // If not available, this section will be skipped gracefully.
-  // When Basic tier is available, we'll fetch followers and follow back.
-  if (followbackBudget > 0) {
-    log('Follower list endpoint requires Basic tier — skipping follow-backs for now');
-    // TODO: When Basic tier is available, fetch followers via:
-    //   GET https://api.twitter.com/2/users/${TWITTER_USER_ID}/followers
-    //   Filter: > 50 followers, Roblox/gaming related bio
-    //   Follow back up to followbackBudget
-  }
+  log('=== Part 2: Follow back — skipped (requires Basic tier) ===');
 
   // ─── PART 3: Unfollow non-followers after 7 days (max 10/day) ─
 
@@ -310,7 +287,6 @@ export async function runTwitterFollowPipeline(
           data: { unfollowedAt: new Date() },
         });
 
-        // Also log the unfollow action
         await db.twitterFollowLog.create({
           data: {
             userId: follow.userId,
@@ -323,8 +299,7 @@ export async function runTwitterFollowPipeline(
         unfollowed++;
         log(`Unfollowed @${follow.username} (no follow-back since ${follow.followedAt.toISOString().split('T')[0]})`);
 
-        // Rate limit delay
-        await new Promise((r) => setTimeout(r, 2000));
+        await delay(2000);
       } else {
         errors.push(`Unfollow @${follow.username} failed: ${result.error}`);
       }
@@ -342,7 +317,7 @@ export async function runTwitterFollowPipeline(
       data: {
         creatorId: systemCreator.id,
         agentName: 'TwitterFollowAgent',
-        input: { followBudget, followbackBudget: followbackBudget, unfollowBudget },
+        input: { followBudget, unfollowBudget },
         output: { followed, followedBack, unfollowed, errorCount: errors.length },
         action: 'twitter_follow',
         robuxImpact: 0,
@@ -351,6 +326,6 @@ export async function runTwitterFollowPipeline(
     });
   }
 
-  log(`Done — followed: ${followed}, followed back: ${followedBack}, unfollowed: ${unfollowed}, errors: ${errors.length}`);
+  log(`Done — followed: ${followed}, unfollowed: ${unfollowed}, errors: ${errors.length}`);
   return { followed, followedBack, unfollowed, errors };
 }
