@@ -417,6 +417,66 @@ export default function Home() {
           </div>
         </section>
 
+        {/* ── Free Tools ── */}
+        <section className="relative border-t border-gray-800/50 px-4 py-20">
+          <div className="mx-auto max-w-5xl">
+            <h2 className="text-center text-2xl font-bold text-white sm:text-3xl">
+              Free tools for every Roblox creator
+            </h2>
+            <p className="mx-auto mt-3 text-center text-gray-500">No account needed. Just data.</p>
+
+            <div className="mt-12 grid gap-6 md:grid-cols-3">
+              {/* DevEx Calculator */}
+              <Link
+                href="/devex-calculator"
+                className="group rounded-xl border border-emerald-500/20 bg-gray-900 p-6 transition-all duration-200 hover:-translate-y-1 hover:border-emerald-500/40 hover:shadow-lg hover:shadow-emerald-500/5"
+              >
+                <div className="text-3xl">&#128176;</div>
+                <h3 className="mt-3 text-lg font-semibold text-white">DevEx Calculator</h3>
+                <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                  See exactly how much you&rsquo;re leaving on the table. Enter your DAU and pricing &mdash; get your DevEx potential instantly.
+                </p>
+                <div className="mt-4 text-xs text-emerald-400/60">Used by 500+ creators</div>
+                <div className="mt-3 text-sm font-semibold text-emerald-400 transition group-hover:text-emerald-300">
+                  Calculate free &rarr;
+                </div>
+              </Link>
+
+              {/* Leaderboard */}
+              <Link
+                href="/leaderboard"
+                className="group rounded-xl border border-indigo-500/20 bg-gray-900 p-6 transition-all duration-200 hover:-translate-y-1 hover:border-indigo-500/40 hover:shadow-lg hover:shadow-indigo-500/5"
+              >
+                <div className="text-3xl">&#127942;</div>
+                <h3 className="mt-3 text-lg font-semibold text-white">Roblox Leaderboard</h3>
+                <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                  Live rankings of the top 50 Roblox games by concurrent players and estimated monthly DevEx. Updated daily.
+                </p>
+                <div className="mt-4 text-xs text-indigo-400/60">50 games tracked live</div>
+                <div className="mt-3 text-sm font-semibold text-indigo-400 transition group-hover:text-indigo-300">
+                  See rankings &rarr;
+                </div>
+              </Link>
+
+              {/* Retention Calculator */}
+              <Link
+                href="/retention-calculator"
+                className="group rounded-xl border border-purple-500/20 bg-gray-900 p-6 transition-all duration-200 hover:-translate-y-1 hover:border-purple-500/40 hover:shadow-lg hover:shadow-purple-500/5"
+              >
+                <div className="text-3xl">&#128202;</div>
+                <h3 className="mt-3 text-lg font-semibold text-white">Retention Calculator</h3>
+                <p className="mt-2 text-sm leading-relaxed text-gray-500">
+                  Benchmark your D1/D7/D30 retention against genre averages. See your revenue upside if you hit top-10% retention.
+                </p>
+                <div className="mt-4 text-xs text-purple-400/60">9 genre benchmarks</div>
+                <div className="mt-3 text-sm font-semibold text-purple-400 transition group-hover:text-purple-300">
+                  Benchmark free &rarr;
+                </div>
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* ── Interactive Game Health Demo ── */}
         <section className="relative border-t border-gray-800/50 bg-gray-900/30 px-4 py-20" ref={demoRef.ref}>
           <div className="mx-auto max-w-3xl">
