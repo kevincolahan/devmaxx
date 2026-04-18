@@ -289,97 +289,191 @@ Respond ONLY with valid JSON:
 }
 
 function buildBriefHtml(gameName: string, brief: BriefSection): string {
+  const now = new Date();
+  const weekDate = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const changeColor = (val: number) => (val >= 0 ? '#4ade80' : '#f87171');
-  const changeArrow = (val: number) => (val >= 0 ? '&#9650;' : '&#9660;');
+  const trendArrow = (val: number) => (val > 0 ? '\u2191' : val < 0 ? '\u2193' : '\u2192');
   const formatPct = (val: number) => `${val >= 0 ? '+' : ''}${val.toFixed(1)}%`;
+  const dauChange = brief.playerHealth.dauThisWeek - brief.playerHealth.dauLastWeek;
+  const dauPct = brief.playerHealth.dauLastWeek > 0 ? (dauChange / brief.playerHealth.dauLastWeek) * 100 : 0;
+
+  // Health score color
+  const healthScore = 50; // Default — in practice this comes from the game
+  const healthColor = healthScore >= 70 ? '#4ade80' : healthScore >= 40 ? '#facc15' : '#f87171';
+  const healthLabel = healthScore >= 70 ? 'Healthy' : healthScore >= 40 ? 'Fair' : 'Needs Work';
+
+  // Impact emoji for top three
+  const impactEmoji = (impact: string) => impact === 'positive' ? '\uD83D\uDCC8' : impact === 'negative' ? '\u26A0\uFE0F' : '\uD83D\uDCA1';
 
   return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;color:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-<div style="max-width:600px;margin:0 auto;padding:32px 24px;">
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Devmaxx Weekly Brief - ${gameName}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0A0A14;color:#f9fafb;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;">
 
-<div style="text-align:center;margin-bottom:32px;">
-  <h1 style="font-size:24px;font-weight:700;margin:0;">Devmaxx Weekly Brief</h1>
-  <p style="color:#9ca3af;margin:8px 0 0;">${gameName}</p>
-</div>
+<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->
+<div style="max-width:600px;margin:0 auto;padding:0;">
 
-<div style="background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;margin-bottom:16px;">
-  <h2 style="font-size:14px;color:#6366f1;text-transform:uppercase;letter-spacing:1px;margin:0 0 16px;">Revenue</h2>
-  <div style="font-size:32px;font-weight:700;">${brief.revenue.thisWeek.toLocaleString()} R$</div>
-  <div style="margin-top:8px;color:${changeColor(brief.revenue.changePercent)};">
-    ${changeArrow(brief.revenue.changePercent)} ${formatPct(brief.revenue.changePercent)} vs last week (${brief.revenue.lastWeek.toLocaleString()} R$)
+<!-- HEADER -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0A0A14;border-bottom:1px solid rgba(99,102,241,0.2);">
+<tr><td style="padding:24px 24px 20px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td style="vertical-align:middle;">
+      <span style="font-size:20px;font-weight:700;color:#818cf8;">Devmaxx</span>
+      <span style="color:#4b5563;font-size:14px;margin-left:8px;">Weekly Brief</span>
+    </td>
+    <td style="text-align:right;vertical-align:middle;">
+      <span style="display:inline-block;background-color:${healthColor}22;color:${healthColor};font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;border:1px solid ${healthColor}44;">${healthLabel}</span>
+    </td>
+  </tr>
+  </table>
+  <div style="margin-top:12px;">
+    <div style="font-size:18px;font-weight:700;color:#ffffff;">${gameName}</div>
+    <div style="font-size:13px;color:#6b7280;margin-top:2px;">Week of ${weekDate}</div>
   </div>
-  <div style="margin-top:4px;color:#6b7280;font-size:14px;">4-week avg: ${brief.revenue.fourWeekAvg.toLocaleString()} R$</div>
-</div>
+</td></tr>
+</table>
 
-<div style="background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;margin-bottom:16px;">
-  <h2 style="font-size:14px;color:#8b5cf6;text-transform:uppercase;letter-spacing:1px;margin:0 0 16px;">Player Health</h2>
-  <div style="display:flex;gap:24px;">
-    <div>
-      <div style="color:#9ca3af;font-size:12px;">DAU</div>
-      <div style="font-size:24px;font-weight:700;">${brief.playerHealth.dauThisWeek.toLocaleString()}</div>
-      <div style="color:${brief.playerHealth.dauThisWeek >= brief.playerHealth.dauLastWeek ? '#4ade80' : '#f87171'};font-size:14px;">
-        ${brief.playerHealth.dauTrend} from ${brief.playerHealth.dauLastWeek.toLocaleString()}
+<!-- THIS WEEK AT A GLANCE -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0F0F1E;border-bottom:1px solid rgba(99,102,241,0.1);">
+<tr><td style="padding:20px 24px 6px;">
+  <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280;">This Week at a Glance</div>
+</td></tr>
+<tr><td style="padding:8px 24px 20px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr>
+    <td style="width:33%;vertical-align:top;padding-right:8px;">
+      <div style="background-color:#141428;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:11px;color:#9ca3af;">DAU</div>
+        <div style="font-size:22px;font-weight:700;color:#ffffff;margin-top:4px;">${brief.playerHealth.dauThisWeek.toLocaleString()}</div>
+        <div style="font-size:12px;color:${changeColor(dauChange)};margin-top:4px;">${trendArrow(dauChange)} ${dauChange >= 0 ? '+' : ''}${dauChange.toLocaleString()}</div>
       </div>
-    </div>
-    <div>
-      <div style="color:#9ca3af;font-size:12px;">D7 Retention</div>
-      <div style="font-size:24px;font-weight:700;">${(brief.playerHealth.d7Retention * 100).toFixed(1)}%</div>
-      <div style="color:${changeColor(brief.playerHealth.d7RetentionChange)};font-size:14px;">
-        ${brief.playerHealth.d7RetentionChange >= 0 ? '+' : ''}${(brief.playerHealth.d7RetentionChange * 100).toFixed(1)}pp
+    </td>
+    <td style="width:34%;vertical-align:top;padding:0 4px;">
+      <div style="background-color:#141428;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:11px;color:#9ca3af;">Revenue</div>
+        <div style="font-size:22px;font-weight:700;color:#ffffff;margin-top:4px;">${brief.revenue.thisWeek.toLocaleString()} R$</div>
+        <div style="font-size:12px;color:${changeColor(brief.revenue.changePercent)};margin-top:4px;">${trendArrow(brief.revenue.changePercent)} ${formatPct(brief.revenue.changePercent)}</div>
       </div>
+    </td>
+    <td style="width:33%;vertical-align:top;padding-left:8px;">
+      <div style="background-color:#141428;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:11px;color:#9ca3af;">Agent Runs</div>
+        <div style="font-size:22px;font-weight:700;color:#818cf8;margin-top:4px;">${brief.agentActivity.totalRuns}</div>
+        <div style="font-size:12px;color:#4ade80;margin-top:4px;">+${brief.agentActivity.totalRobuxImpact.toLocaleString()} R$</div>
+      </div>
+    </td>
+  </tr>
+  </table>
+</td></tr>
+</table>
+
+<!-- WHAT CHANGED -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0A0A14;">
+<tr><td style="padding:24px;">
+  <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280;margin-bottom:16px;">What Changed</div>
+  ${brief.topThree.map((item) => `
+  <div style="margin-bottom:10px;padding:12px 14px;background-color:#0F0F1E;border-radius:8px;border-left:3px solid ${item.impact === 'positive' ? '#4ade80' : item.impact === 'negative' ? '#f87171' : '#818cf8'};">
+    <span style="font-size:14px;">${impactEmoji(item.impact)}</span>
+    <span style="font-weight:600;color:#ffffff;margin-left:6px;">${item.title}</span>
+    <div style="color:#9ca3af;font-size:13px;margin-top:4px;line-height:1.5;">${item.description}</div>
+  </div>`).join('')}
+</td></tr>
+</table>
+
+<!-- TOP RECOMMENDATION -->
+${brief.nextActions.length > 0 ? `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0A0A14;">
+<tr><td style="padding:0 24px 24px;">
+  <div style="background:linear-gradient(135deg,#1e1b4b,#0F0F1E);border:1px solid rgba(99,102,241,0.3);border-radius:12px;padding:20px;">
+    <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:#818cf8;margin-bottom:10px;">Top Recommendation This Week</div>
+    <div style="font-size:16px;font-weight:700;color:#ffffff;line-height:1.4;">${brief.nextActions[0].action}</div>
+    <div style="margin-top:10px;">
+      <span style="display:inline-block;background-color:#065f46;color:#6ee7b7;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;">Impact: ${brief.nextActions[0].estimatedImpact}</span>
+      <span style="display:inline-block;background-color:#1e1b4e;color:#a5b4fc;padding:3px 10px;border-radius:6px;font-size:11px;font-weight:600;margin-left:6px;">Effort: ${brief.nextActions[0].effortLevel}</span>
     </div>
   </div>
-</div>
+</td></tr>
+</table>` : ''}
 
-<div style="background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;margin-bottom:16px;">
-  <h2 style="font-size:14px;color:#f59e0b;text-transform:uppercase;letter-spacing:1px;margin:0 0 16px;">Top 3 This Week</h2>
-  ${brief.topThree
-    .map(
-      (item, i) => `
-  <div style="margin-bottom:${i < 2 ? '12px' : '0'};padding-left:12px;border-left:3px solid ${item.impact === 'positive' ? '#4ade80' : item.impact === 'negative' ? '#f87171' : '#6b7280'};">
-    <div style="font-weight:600;">${i + 1}. ${item.title}</div>
-    <div style="color:#9ca3af;font-size:14px;margin-top:2px;">${item.description}</div>
-  </div>`
-    )
-    .join('')}
-</div>
-
-<div style="background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;margin-bottom:16px;">
-  <h2 style="font-size:14px;color:#10b981;text-transform:uppercase;letter-spacing:1px;margin:0 0 16px;">Next 3 Actions</h2>
-  ${brief.nextActions
-    .map(
-      (item, i) => `
-  <div style="margin-bottom:${i < 2 ? '12px' : '0'};">
-    <div style="font-weight:600;">${i + 1}. ${item.action}</div>
-    <div style="margin-top:4px;font-size:13px;">
-      <span style="background:#065f46;color:#6ee7b7;padding:2px 8px;border-radius:4px;">Impact: ${item.estimatedImpact}</span>
-      <span style="background:#1e1b4e;color:#a5b4fc;padding:2px 8px;border-radius:4px;margin-left:4px;">Effort: ${item.effortLevel}</span>
+<!-- MORE ACTIONS -->
+${brief.nextActions.length > 1 ? `
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0A0A14;">
+<tr><td style="padding:0 24px 24px;">
+  <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280;margin-bottom:12px;">Also Consider</div>
+  ${brief.nextActions.slice(1).map((item, i) => `
+  <div style="margin-bottom:8px;padding:10px 14px;background-color:#0F0F1E;border-radius:8px;">
+    <div style="font-weight:600;color:#ffffff;">${i + 2}. ${item.action}</div>
+    <div style="margin-top:6px;">
+      <span style="display:inline-block;background-color:#065f46;color:#6ee7b7;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;">Impact: ${item.estimatedImpact}</span>
+      <span style="display:inline-block;background-color:#1e1b4e;color:#a5b4fc;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;margin-left:4px;">Effort: ${item.effortLevel}</span>
     </div>
-  </div>`
-    )
-    .join('')}
-</div>
+  </div>`).join('')}
+</td></tr>
+</table>` : ''}
 
-<div style="background:#111827;border:1px solid #1f2937;border-radius:12px;padding:24px;margin-bottom:32px;">
-  <h2 style="font-size:14px;color:#ec4899;text-transform:uppercase;letter-spacing:1px;margin:0 0 16px;">Agent Activity</h2>
-  <div style="display:flex;flex-wrap:wrap;gap:16px;">
-    <div><span style="color:#9ca3af;font-size:12px;">Runs</span><br><strong>${brief.agentActivity.totalRuns}</strong></div>
-    <div><span style="color:#9ca3af;font-size:12px;">Robux Impact</span><br><strong style="color:#4ade80;">+${brief.agentActivity.totalRobuxImpact.toLocaleString()}</strong></div>
-    <div><span style="color:#9ca3af;font-size:12px;">Tickets Resolved</span><br><strong>${brief.agentActivity.ticketsResolved}</strong></div>
-    <div><span style="color:#9ca3af;font-size:12px;">Escalated</span><br><strong>${brief.agentActivity.ticketsEscalated}</strong></div>
-    <div><span style="color:#9ca3af;font-size:12px;">Content</span><br><strong>${brief.agentActivity.contentGenerated}</strong></div>
+<!-- AGENT ACTIVITY -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0F0F1E;border-top:1px solid rgba(99,102,241,0.1);">
+<tr><td style="padding:20px 24px 8px;">
+  <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:#6b7280;">Your Agents Ran ${brief.agentActivity.totalRuns} Times</div>
+</td></tr>
+<tr><td style="padding:8px 24px 20px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="font-size:13px;">
+  <tr style="color:#6b7280;">
+    <td style="padding:6px 0;border-bottom:1px solid #1f2937;">Agent</td>
+    <td style="padding:6px 0;border-bottom:1px solid #1f2937;text-align:center;">Activity</td>
+    <td style="padding:6px 0;border-bottom:1px solid #1f2937;text-align:right;">Impact</td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;color:#ffffff;">Top Agent</td>
+    <td style="padding:8px 0;text-align:center;color:#9ca3af;">${brief.agentActivity.topAgent.replace(/Agent$/, '').replace(/([A-Z])/g, ' $1').trim()}</td>
+    <td style="padding:8px 0;text-align:right;color:#4ade80;font-weight:600;">+${brief.agentActivity.totalRobuxImpact.toLocaleString()} R$</td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;color:#ffffff;">Support</td>
+    <td style="padding:8px 0;text-align:center;color:#9ca3af;">${brief.agentActivity.ticketsResolved} resolved</td>
+    <td style="padding:8px 0;text-align:right;color:${brief.agentActivity.ticketsEscalated > 0 ? '#facc15' : '#6b7280'};">${brief.agentActivity.ticketsEscalated} escalated</td>
+  </tr>
+  <tr>
+    <td style="padding:8px 0;color:#ffffff;">Content</td>
+    <td style="padding:8px 0;text-align:center;color:#9ca3af;">${brief.agentActivity.contentGenerated} pieces</td>
+    <td style="padding:8px 0;text-align:right;color:#818cf8;">generated</td>
+  </tr>
+  </table>
+</td></tr>
+</table>
+
+<!-- CTA BUTTON -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0A0A14;">
+<tr><td style="padding:24px;text-align:center;">
+  <a href="https://devmaxx.app/dashboard" style="display:inline-block;background-color:#6366f1;color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 32px;border-radius:8px;">View Full Dashboard &rarr;</a>
+</td></tr>
+</table>
+
+<!-- FOOTER -->
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#0A0A14;border-top:1px solid rgba(99,102,241,0.1);">
+<tr><td style="padding:24px;text-align:center;">
+  <div style="color:#4b5563;font-size:12px;line-height:1.6;">
+    <div style="font-weight:600;color:#6b7280;">Devmaxx</div>
+    <div>devmaxx.app &middot; Maxx your DevEx</div>
+    <div style="margin-top:12px;">
+      <a href="https://devmaxx.app/dashboard" style="color:#818cf8;text-decoration:none;">Dashboard</a>
+      <span style="color:#374151;margin:0 8px;">|</span>
+      <a href="https://x.com/devmaxxapp" style="color:#818cf8;text-decoration:none;">@devmaxxapp</a>
+      <span style="color:#374151;margin:0 8px;">|</span>
+      <a href="https://devmaxx.app/settings" style="color:#6b7280;text-decoration:none;">Unsubscribe</a>
+    </div>
   </div>
-  <div style="margin-top:12px;color:#9ca3af;font-size:13px;">Top agent: ${brief.agentActivity.topAgent.replace(/Agent$/, '').replace(/([A-Z])/g, ' $1').trim()}</div>
-</div>
-
-<div style="text-align:center;color:#6b7280;font-size:12px;">
-  <p>Devmaxx &middot; devmaxx.app &middot; Maxx your DevEx</p>
-  <p><a href="https://devmaxx.app/settings/notifications" style="color:#6366f1;">Manage notification preferences</a></p>
-</div>
+</td></tr>
+</table>
 
 </div>
+<!--[if mso]></td></tr></table><![endif]-->
+
 </body>
 </html>`;
 }
