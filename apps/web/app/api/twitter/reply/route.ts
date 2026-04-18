@@ -68,19 +68,21 @@ function buildAuthorizationHeader(
 }
 
 // ─── Route Handler ──────────────────────────────────────────
+// Supports two modes:
+//   1. Quote tweet: { text, quoteTweetId }
+//   2. Reply:       { text, replyToTweetId }
 
 export async function POST(req: NextRequest) {
   // Auth: CRON_SECRET bearer token only
   const authHeader = req.headers.get('authorization') || '';
   const cronSecret = (process.env.CRON_SECRET || '').trim();
-  console.log(`[twitter/reply] Auth check — cronSecret set: ${cronSecret ? 'yes' : 'NO'} (${cronSecret.length} chars), authHeader: "${authHeader.slice(0, 20)}..." (${authHeader.length} chars)`);
 
   if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-    console.error(`[twitter/reply] AUTH FAILED — cronSecret empty: ${!cronSecret}, match: ${authHeader === `Bearer ${cronSecret}`}`);
+    console.error(`[twitter/reply] AUTH FAILED`);
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let body: { text?: string; replyToTweetId?: string };
+  let body: { text?: string; replyToTweetId?: string; quoteTweetId?: string };
   try {
     body = await req.json();
   } catch (parseErr) {
@@ -88,15 +90,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const { text, replyToTweetId } = body;
-  console.log(`[twitter/reply] Request — text: "${(text ?? '').slice(0, 60)}..." (${(text ?? '').length} chars), replyToTweetId: ${replyToTweetId}`);
+  const { text, replyToTweetId, quoteTweetId } = body;
+  const mode = quoteTweetId ? 'quote' : 'reply';
 
-  if (!text || !replyToTweetId) {
-    return NextResponse.json({ error: 'text and replyToTweetId are required' }, { status: 400 });
+  console.log(`[twitter/${mode}] Request — text: "${(text ?? '').slice(0, 60)}..." (${(text ?? '').length} chars), ${mode === 'quote' ? `quoteTweetId: ${quoteTweetId}` : `replyToTweetId: ${replyToTweetId}`}`);
+
+  if (!text) {
+    return NextResponse.json({ error: 'text is required' }, { status: 400 });
+  }
+
+  if (!replyToTweetId && !quoteTweetId) {
+    return NextResponse.json({ error: 'replyToTweetId or quoteTweetId is required' }, { status: 400 });
   }
 
   if (text.length > 280) {
-    return NextResponse.json({ error: `Reply exceeds 280 characters (${text.length})` }, { status: 400 });
+    return NextResponse.json({ error: `Tweet exceeds 280 characters (${text.length})` }, { status: 400 });
   }
 
   const apiKey = (process.env.TWITTER_API_KEY || '').trim();
@@ -111,23 +119,25 @@ export async function POST(req: NextRequest) {
       !accessToken && 'TWITTER_ACCESS_TOKEN',
       !accessSecret && 'TWITTER_ACCESS_SECRET',
     ].filter(Boolean);
-    console.error(`[twitter/reply] Missing credentials: ${missing.join(', ')}`);
+    console.error(`[twitter/${mode}] Missing credentials: ${missing.join(', ')}`);
     return NextResponse.json({ error: `Missing Twitter credentials: ${missing.join(', ')}` }, { status: 503 });
   }
-
-  console.log(`[twitter/reply] Credentials loaded — apiKey: ${apiKey.length}ch, apiSecret: ${apiSecret.length}ch, accessToken: ${accessToken.length}ch, accessSecret: ${accessSecret.length}ch`);
 
   try {
     const twitterUrl = 'https://api.twitter.com/2/tweets';
     const authorization = buildAuthorizationHeader('POST', twitterUrl, apiKey, apiSecret, accessToken, accessSecret);
 
-    const twitterPayload = {
-      text,
-      reply: { in_reply_to_tweet_id: replyToTweetId },
-    };
+    // Build payload based on mode
+    const twitterPayload: Record<string, unknown> = { text };
 
-    console.log(`[twitter/reply] Calling Twitter API — POST ${twitterUrl}`);
-    console.log(`[twitter/reply] Payload: ${JSON.stringify(twitterPayload)}`);
+    if (quoteTweetId) {
+      twitterPayload.quote_tweet_id = quoteTweetId;
+    } else if (replyToTweetId) {
+      twitterPayload.reply = { in_reply_to_tweet_id: replyToTweetId };
+    }
+
+    console.log(`[twitter/${mode}] Calling Twitter API — POST ${twitterUrl}`);
+    console.log(`[twitter/${mode}] Payload: ${JSON.stringify(twitterPayload)}`);
 
     const response = await fetch(twitterUrl, {
       method: 'POST',
@@ -139,7 +149,7 @@ export async function POST(req: NextRequest) {
     });
 
     const responseBody = await response.text();
-    console.log(`[twitter/reply] Twitter API response: status=${response.status} body=${responseBody.slice(0, 500)}`);
+    console.log(`[twitter/${mode}] Twitter API response: status=${response.status} body=${responseBody.slice(0, 500)}`);
 
     if (!response.ok) {
       return NextResponse.json({ error: `Twitter API ${response.status}: ${responseBody}` }, { status: 502 });
@@ -149,16 +159,16 @@ export async function POST(req: NextRequest) {
     const tweetId = data.data?.id;
 
     if (!tweetId) {
-      console.error(`[twitter/reply] No tweet ID in response: ${responseBody}`);
+      console.error(`[twitter/${mode}] No tweet ID in response: ${responseBody}`);
       return NextResponse.json({ error: `Unexpected response: ${responseBody}` }, { status: 502 });
     }
 
-    const replyUrl = `https://x.com/devmaxxapp/status/${tweetId}`;
-    console.log(`[twitter/reply] SUCCESS — ${replyUrl}`);
+    const tweetUrl = `https://x.com/devmaxxapp/status/${tweetId}`;
+    console.log(`[twitter/${mode}] SUCCESS — ${tweetUrl}`);
 
-    return NextResponse.json({ success: true, tweetId, replyUrl });
+    return NextResponse.json({ success: true, tweetId, tweetUrl, mode });
   } catch (err) {
-    console.error('[twitter/reply] Exception:', err);
+    console.error(`[twitter/${mode}] Exception:`, err);
     return NextResponse.json({ error: `Failed: ${String(err)}` }, { status: 502 });
   }
 }

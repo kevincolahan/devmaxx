@@ -90,17 +90,17 @@ async function searchRecentTweets(): Promise<{
   };
 }
 
-// ─── Twitter Reply (via Vercel proxy) ────────────────────────
+// ─── Quote Tweet (via Vercel proxy) ──────────────────────────
 
-async function postReply(
+async function postQuoteTweet(
   text: string,
-  inReplyToId: string
+  quoteTweetId: string
 ): Promise<{ success: boolean; tweetId?: string; error?: string }> {
   const url = `${VERCEL_BASE}/api/twitter/reply`;
-  const payload = { text, replyToTweetId: inReplyToId };
+  const payload = { text, quoteTweetId };
 
-  console.log(`[XOutreach] postReply() → POST ${url}`);
-  console.log(`[XOutreach] postReply() payload: ${JSON.stringify(payload)}`);
+  console.log(`[XOutreach] postQuoteTweet() → POST ${url}`);
+  console.log(`[XOutreach] postQuoteTweet() payload: ${JSON.stringify(payload)}`);
 
   let res: Response;
   try {
@@ -110,15 +110,15 @@ async function postReply(
       body: JSON.stringify(payload),
     });
   } catch (fetchErr) {
-    console.error(`[XOutreach] postReply() fetch exception:`, fetchErr);
+    console.error(`[XOutreach] postQuoteTweet() fetch exception:`, fetchErr);
     return { success: false, error: `Fetch failed: ${String(fetchErr)}` };
   }
 
   const body = await res.text();
-  console.log(`[XOutreach] postReply() response: status=${res.status} body=${body.slice(0, 500)}`);
+  console.log(`[XOutreach] postQuoteTweet() response: status=${res.status} body=${body.slice(0, 500)}`);
 
   if (!res.ok) {
-    return { success: false, error: `Reply proxy ${res.status}: ${body}` };
+    return { success: false, error: `Quote proxy ${res.status}: ${body}` };
   }
 
   let data: { success?: boolean; tweetId?: string; error?: string };
@@ -153,7 +153,9 @@ async function classifyAndDraftReplies(
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 2048,
-    system: `You are Kevin Colahan — founder of Devmaxx (devmaxx.app), a Roblox creator yourself, talking to peers on X. You sound like a real person sharing what you know, not a brand account.
+    system: `You are Kevin Colahan — founder of Devmaxx (devmaxx.app), a Roblox creator yourself. You're writing QUOTE TWEETS (not replies) that add value to the original tweet. The original tweet will appear embedded below your text automatically.
+
+IMPORTANT: These are QUOTE TWEETS. Your text must be self-contained commentary that makes sense on its own, with the quoted tweet visible below. Don't address the author directly with "you" — write it as if sharing their tweet with your audience and adding insight.
 
 CLASSIFY each tweet into one of these categories:
 - "analytics_question": asking how to track metrics, DAU, retention, etc.
@@ -161,66 +163,58 @@ CLASSIFY each tweet into one of these categories:
 - "frustration": struggling with revenue, metrics, or game growth
 - "milestone": celebrating earnings, player counts, or achievements
 - "general_roblox": general Roblox creator content, not specifically about business
-- "skip": spam, bots, irrelevant, or not worth replying to
+- "skip": spam, bots, irrelevant, or not worth quote tweeting
 
 VOICE — how Kevin sounds:
-- Casual, direct, no filler. Like texting a friend who makes games.
+- Casual, direct, no filler. Like sharing a take with your followers.
 - Uses short sentences. Gets to the point.
 - Shares real tactical advice, not generic "keep grinding" stuff.
-- Never uses emoji at the end of replies. No 🎮 📊 🚀 ever.
+- Never uses emoji. No 🎮 📊 🚀 ever.
 - Sounds like someone who has been in the trenches, not a marketer.
 
-PRODUCT MENTION RULES (this is critical):
-- Only 40% of replies should mention devmaxx.app. The other 60% should be purely helpful with zero product mention.
-- NEVER end a reply with "devmaxx.app" as the last word — if you mention it, weave it in mid-sentence or as a parenthetical.
-- Vary how you end replies:
-  * End with the advice itself ("...that alone can 2x your conversion.")
-  * End with a genuine follow-up question ("What genre are you building in?")
-  * End with encouragement ("You're past the hard part.")
-  * Mid-sentence mention is fine: "I track this with devmaxx.app but even a spreadsheet works"
-- NEVER mention devmaxx.app in milestone or frustration replies. Just be human.
+QUOTE TWEET STYLE EXAMPLES:
+
+"This is the part most Roblox devs skip. D1 retention above 20% before you even think about monetization."
+
+"Real talk — A/B testing game pass prices is the single highest-ROI thing a solo creator can do. Most never try it."
+
+"Congrats to this creator. Hitting consistent DevEx is harder than people think."
+
+"Retention is the silent killer. If your D1 is under 15%, no amount of marketing fixes it."
+
+PRODUCT MENTION RULES:
+- Only 40% of quote tweets should mention devmaxx.app. The other 60% should be purely insightful.
+- When mentioning, weave naturally: "This is exactly why I built devmaxx.app — most creators don't track this."
+- NEVER mention devmaxx.app for milestone or frustration tweets. Just be human.
 
 CATEGORY GUIDELINES:
 
-milestone (e.g. someone hit $1300 DevEx, 10K visits):
-- Pure congratulations. No pitch. No "next step" advice unless asked.
-- Keep it short and genuine: "That's a real milestone. The grind pays off."
-- Maybe ask what game if you're curious. That's it.
+milestone: Genuine congrats framed for your audience. "Love seeing this. The grind is real and it pays off."
 
-analytics_question (someone asking how to track something):
-- Answer the question directly with specific advice.
-- ~40% chance: mention devmaxx.app as something you built, casually mid-reply.
-- ~60% chance: just answer fully, no mention.
+analytics_question: Share your take on the right approach. ~40% mention devmaxx.app.
 
-monetization_help (someone asking about pricing, revenue, DevEx):
-- Give concrete tactical advice (A/B test prices, check price elasticity, etc.).
-- ~40% chance: mention devmaxx.app naturally mid-reply.
-- ~60% chance: just share the insight.
+monetization_help: Give a concrete tactical take. ~40% mention devmaxx.app.
 
-frustration (someone struggling):
-- Be empathetic. Give one specific actionable thing they can try.
-- NEVER mention devmaxx.app. NEVER include any link. Just help.
-- "Retention is usually the culprit. Check if D1 is above 20% — if not, your first 5 minutes need work."
+frustration: Empathetic insight. NEVER mention devmaxx.app. Just share what works.
 
-general_roblox:
-- Set to "skip" unless directly about analytics/monetization.
+general_roblox: Set to "skip" unless directly about analytics/monetization.
 
 CRITICAL RULES:
-- Keep ALL replies under 280 characters
-- NO emoji anywhere in any reply
-- Vary every reply — never use the same phrasing twice
-- Give SPECIFIC advice relevant to what they actually said
+- Keep ALL text under 260 characters (quote tweets need room for the embed)
+- NO emoji anywhere
+- Vary every quote tweet — never use the same phrasing twice
+- Give SPECIFIC insight relevant to the original tweet
 - If a tweet is ambiguous or not clearly about Roblox business, set to "skip"
-- Sound like a real person, not a template
+- Write as commentary for your followers, not a direct reply to the author
 
-${previousReplies.length > 0 ? `\nPREVIOUS REPLIES (do NOT repeat these or use similar phrasing):\n${previousReplies.map((r) => `- "${r}"`).join('\n')}` : ''}
+${previousReplies.length > 0 ? `\nPREVIOUS QUOTE TWEETS (do NOT repeat these or use similar phrasing):\n${previousReplies.map((r) => `- "${r}"`).join('\n')}` : ''}
 
 Respond ONLY with valid JSON array:
 [
   {
     "tweetId": "tweet_id",
     "category": "analytics_question",
-    "replyDraft": "The reply text under 280 chars"
+    "replyDraft": "The quote tweet text under 260 chars"
   }
 ]`,
     messages: [
@@ -466,9 +460,9 @@ export async function runXOutreachPipeline(
       continue;
     }
 
-    // Enforce 280 char limit
-    if (item.replyDraft.length > 280) {
-      console.log(`[XOutreach] Skipping reply to ${tweet.id} by @${username} — draft exceeds 280 chars (${item.replyDraft.length})`);
+    // Enforce 260 char limit (quote tweets need room for embed)
+    if (item.replyDraft.length > 260) {
+      console.log(`[XOutreach] Skipping quote tweet for ${tweet.id} by @${username} — draft exceeds 260 chars (${item.replyDraft.length})`);
       result.skipped++;
       continue;
     }
@@ -489,19 +483,17 @@ export async function runXOutreachPipeline(
 
     // Post the reply
     try {
-      console.log(`[XOutreach] >>> POSTING REPLY to @${username} (${item.category})`);
+      console.log(`[XOutreach] >>> POSTING QUOTE TWEET about @${username} (${item.category})`);
       console.log(`[XOutreach]     tweet_id: ${tweet.id}`);
       console.log(`[XOutreach]     draft: "${item.replyDraft}"`);
-      console.log(`[XOutreach]     url: ${VERCEL_BASE}/api/twitter/reply`);
-      console.log(`[XOutreach]     CRON_SECRET set: ${CRON_SECRET ? 'yes' : 'NO — MISSING'} (${CRON_SECRET.length} chars)`);
 
-      const replyResult = await postReply(item.replyDraft, tweet.id);
+      const quoteResult = await postQuoteTweet(item.replyDraft, tweet.id);
 
-      console.log(`[XOutreach]     result: success=${replyResult.success} tweetId=${replyResult.tweetId ?? 'none'} error=${replyResult.error ?? 'none'}`);
+      console.log(`[XOutreach]     result: success=${quoteResult.success} tweetId=${quoteResult.tweetId ?? 'none'} error=${quoteResult.error ?? 'none'}`);
 
-      if (replyResult.success) {
-        const replyUrl = replyResult.tweetId
-          ? `https://x.com/devmaxxapp/status/${replyResult.tweetId}`
+      if (quoteResult.success) {
+        const quoteUrl = quoteResult.tweetId
+          ? `https://x.com/devmaxxapp/status/${quoteResult.tweetId}`
           : null;
 
         await db.xOutreachLog.update({
@@ -509,7 +501,7 @@ export async function runXOutreachPipeline(
           data: {
             replyPosted: true,
             postedAt: new Date(),
-            replyUrl,
+            replyUrl: quoteUrl,
           },
         });
 
@@ -518,14 +510,14 @@ export async function runXOutreachPipeline(
         recentlyRepliedAuthors.add(tweet.author_id);
         previousReplies.push(item.replyDraft);
 
-        console.log(`[XOutreach] SUCCESS — replied to @${username}: ${replyUrl ?? replyResult.tweetId}`);
+        console.log(`[XOutreach] SUCCESS — quote tweeted about @${username}: ${quoteUrl ?? quoteResult.tweetId}`);
       } else {
-        console.error(`[XOutreach] FAILED to reply to @${username}: ${replyResult.error}`);
-        result.errors.push(`Reply to @${username} failed: ${replyResult.error}`);
+        console.error(`[XOutreach] FAILED to quote tweet about @${username}: ${quoteResult.error}`);
+        result.errors.push(`Quote tweet about @${username} failed: ${quoteResult.error}`);
       }
     } catch (err) {
-      console.error(`[XOutreach] EXCEPTION replying to @${username}:`, err);
-      result.errors.push(`Reply to @${username} error: ${String(err)}`);
+      console.error(`[XOutreach] EXCEPTION quote tweeting about @${username}:`, err);
+      result.errors.push(`Quote tweet about @${username} error: ${String(err)}`);
     }
   }
 
