@@ -32,6 +32,24 @@ interface AnalysisOutput {
   recommendations: string[];
 }
 
+// ─── Timeout utility ────────────────────────────────────────
+
+function withStepTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`[MetricsMonitor] TIMEOUT after ${ms}ms: ${label}`));
+    }, ms);
+
+    promise
+      .then((val) => { clearTimeout(timer); resolve(val); })
+      .catch((err) => { clearTimeout(timer); reject(err); });
+  });
+}
+
+function log(msg: string) {
+  console.log(`[MetricsMonitor] ${msg}`);
+}
+
 // ─── Genre Benchmark Data ───────────────────────────────────
 // Based on aggregated Roblox analytics across game categories.
 // Source: Public Roblox developer community data + DevEx reports.
@@ -259,12 +277,35 @@ Respond ONLY with valid JSON in this exact format:
     input: MetricsInput,
     db: import('@prisma/client').PrismaClient
   ): Promise<AgentResult> {
-    const accessToken = await refreshAccessToken(creatorId, db);
+    const STEP_TIMEOUT = 15_000; // 15s per external call
 
-    // Get game genre for benchmarks
+    // Step 1: Refresh access token
+    log(`Step 1: Refreshing access token for creator ${creatorId}...`);
+    let accessToken: string;
+    try {
+      accessToken = await withStepTimeout(
+        refreshAccessToken(creatorId, db),
+        STEP_TIMEOUT,
+        'refreshAccessToken'
+      );
+      log(`Step 1: Token refreshed (${accessToken.length} chars)`);
+    } catch (err) {
+      log(`Step 1: FAILED — ${err}`);
+      const failed: AgentResult = {
+        action: 'token_refresh_failed',
+        output: { error: String(err), step: 'refreshAccessToken' },
+        status: 'failed',
+      };
+      await this.logRunSafe(creatorId, gameId, failed, db);
+      return failed;
+    }
+
+    // Step 2: Get game genre for benchmarks
+    log(`Step 2: Fetching game genre for ${gameId}...`);
     const game = await db.game.findUnique({ where: { id: gameId } });
     const genres = game?.genre ?? [];
     const benchmarks = getBenchmarksForGenre(genres);
+    log(`Step 2: Genre = ${genres[0] || 'default'}`);
 
     const now = new Date();
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -275,45 +316,72 @@ Respond ONLY with valid JSON in this exact format:
     const priorStart = fourteenDaysAgo.toISOString().split('T')[0];
     const priorEnd = startDate;
 
-    const currentMetrics = await fetchGameAnalytics(
-      input.universeId,
-      accessToken,
-      startDate,
-      endDate
-    );
-
-    await db.metricSnapshot.create({
-      data: {
-        gameId,
-        date: now,
-        dau: currentMetrics.dau,
-        mau: currentMetrics.mau,
-        concurrentPeak: currentMetrics.concurrentPeak,
-        avgSessionSec: currentMetrics.avgSessionSec,
-        retentionD1: currentMetrics.retentionD1,
-        retentionD7: currentMetrics.retentionD7,
-        retentionD30: currentMetrics.retentionD30,
-        robuxEarned: currentMetrics.robuxEarned,
-        newPlayers: currentMetrics.newPlayers,
-        returningPlayers: currentMetrics.returningPlayers,
-        topItems: currentMetrics.topItems,
-        visitSources: currentMetrics.visitSources,
-      },
-    });
-
-    let priorMetrics: Record<string, unknown> | null = null;
+    // Step 3: Fetch current period analytics
+    log(`Step 3: Fetching current analytics (${startDate} to ${endDate})...`);
+    let currentMetrics: Awaited<ReturnType<typeof fetchGameAnalytics>>;
     try {
-      const priorData = await fetchGameAnalytics(
-        input.universeId,
-        accessToken,
-        priorStart,
-        priorEnd
+      currentMetrics = await withStepTimeout(
+        fetchGameAnalytics(input.universeId, accessToken, startDate, endDate),
+        STEP_TIMEOUT,
+        `fetchGameAnalytics(current: ${startDate}..${endDate})`
       );
-      priorMetrics = priorData as unknown as Record<string, unknown>;
-    } catch {
-      // First run — no prior data available
+      log(`Step 3: Current metrics fetched — DAU: ${currentMetrics.dau}, Robux: ${currentMetrics.robuxEarned}`);
+    } catch (err) {
+      log(`Step 3: FAILED — ${err}`);
+      const failed: AgentResult = {
+        action: 'metrics_fetch_failed',
+        output: { error: String(err), step: 'fetchCurrentMetrics', period: `${startDate}..${endDate}` },
+        status: 'failed',
+      };
+      await this.logRunSafe(creatorId, gameId, failed, db);
+      return failed;
     }
 
+    // Step 4: Save snapshot
+    log(`Step 4: Saving metric snapshot...`);
+    try {
+      await db.metricSnapshot.create({
+        data: {
+          gameId,
+          date: now,
+          dau: currentMetrics.dau,
+          mau: currentMetrics.mau,
+          concurrentPeak: currentMetrics.concurrentPeak,
+          avgSessionSec: currentMetrics.avgSessionSec,
+          retentionD1: currentMetrics.retentionD1,
+          retentionD7: currentMetrics.retentionD7,
+          retentionD30: currentMetrics.retentionD30,
+          robuxEarned: currentMetrics.robuxEarned,
+          newPlayers: currentMetrics.newPlayers,
+          returningPlayers: currentMetrics.returningPlayers,
+          topItems: currentMetrics.topItems,
+          visitSources: currentMetrics.visitSources,
+        },
+      });
+      log(`Step 4: Snapshot saved`);
+    } catch (err) {
+      log(`Step 4: WARNING — snapshot save failed: ${err}`);
+      // Continue — we can still analyze even if snapshot save fails
+    }
+
+    // Step 5: Fetch prior period analytics (optional — may not exist)
+    log(`Step 5: Fetching prior analytics (${priorStart} to ${priorEnd})...`);
+    let priorMetrics: Record<string, unknown> | null = null;
+    try {
+      const priorData = await withStepTimeout(
+        fetchGameAnalytics(input.universeId, accessToken, priorStart, priorEnd),
+        STEP_TIMEOUT,
+        `fetchGameAnalytics(prior: ${priorStart}..${priorEnd})`
+      );
+      priorMetrics = priorData as unknown as Record<string, unknown>;
+      log(`Step 5: Prior metrics fetched`);
+    } catch (err) {
+      log(`Step 5: Prior metrics unavailable (${err}) — continuing without comparison`);
+      // First run or API timeout — not a fatal error
+    }
+
+    // Step 6: Run Claude analysis
+    log(`Step 6: Running Claude analysis...`);
     const context: AgentContext = {
       creatorId,
       gameId,
@@ -327,6 +395,47 @@ Respond ONLY with valid JSON in this exact format:
       db,
     };
 
-    return this.run(context);
+    try {
+      const result = await withStepTimeout(
+        this.run(context),
+        20_000, // 20s for Claude
+        'Claude analysis'
+      );
+      log(`Step 6: Analysis complete — health score: ${(result.output as any)?.healthScore ?? 'unknown'}`);
+      return result;
+    } catch (err) {
+      log(`Step 6: FAILED — ${err}`);
+      const failed: AgentResult = {
+        action: 'analysis_timeout',
+        output: { error: String(err), step: 'claudeAnalysis' },
+        status: 'failed',
+      };
+      await this.logRunSafe(creatorId, gameId, failed, db);
+      return failed;
+    }
+  }
+
+  private async logRunSafe(
+    creatorId: string,
+    gameId: string,
+    result: AgentResult,
+    db: import('@prisma/client').PrismaClient
+  ): Promise<void> {
+    try {
+      await db.agentRun.create({
+        data: {
+          creatorId,
+          agentName: this.agentName,
+          gameId,
+          input: {},
+          output: result.output as any,
+          action: result.action,
+          robuxImpact: result.robuxImpact ?? 0,
+          status: result.status,
+        },
+      });
+    } catch (err) {
+      log(`WARNING: Failed to log agent run: ${err}`);
+    }
   }
 }
