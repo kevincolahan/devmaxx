@@ -27,20 +27,17 @@ xOutreachRouter.post('/', async (_req, res) => {
   }
 });
 
-// Reset: clear old XOutreachLog entries to allow fresh runs
+// Reset: clear ALL XOutreachLog entries for fresh testing
 xOutreachRouter.post('/reset', async (_req, res) => {
   try {
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const deleted = await db.xOutreachLog.deleteMany({
-      where: { createdAt: { lt: sevenDaysAgo } },
-    });
+    const deleted = await db.xOutreachLog.deleteMany({});
 
-    console.log(`[XOutreach] Reset — deleted ${deleted.count} log entries older than 7 days`);
+    console.log(`[XOutreach] Reset — deleted ${deleted.count} log entries`);
 
     res.json({
       success: true,
       deletedCount: deleted.count,
-      message: `Cleared ${deleted.count} outreach log entries older than 7 days`,
+      message: `Cleared ${deleted.count} outreach log entries`,
     });
   } catch (err) {
     console.error('XOutreach reset failed:', err);
