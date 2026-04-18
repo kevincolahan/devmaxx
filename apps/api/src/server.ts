@@ -38,6 +38,7 @@ import { startScheduler } from './cron/scheduler';
 import { autoAnnounceFeatures } from './agents/feature-announcement';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { startDiscordBot } from './discord/bot';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -115,6 +116,11 @@ async function startup() {
       console.error('[STARTUP] Scheduler failed to start:', err);
       // Don't exit — let the API serve requests even if scheduler fails
     }
+
+    // Start Discord bot (fire and forget)
+    startDiscordBot(db).catch((err) => {
+      console.error('[STARTUP] Discord bot failed:', err);
+    });
 
     // Auto-announce new features from FEATURES.md (fire and forget)
     try {

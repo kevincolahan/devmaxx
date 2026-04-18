@@ -2,7 +2,9 @@
   "name": "@devmaxx/api",
   "version": "0.0.1",
   "private": true,
-  "engines": { "node": "18" },
+  "engines": {
+    "node": "18"
+  },
   "main": "dist/server.js",
   "scripts": {
     "start": "node dist/server.js",
@@ -13,6 +15,7 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@prisma/client": "5.22.0",
     "cors": "^2.8.5",
+    "discord.js": "^14.26.3",
     "express": "^4.21.1",
     "node-cron": "^4.2.1",
     "resend": "^4.0.1",

@@ -392,6 +392,16 @@ model Leaderboard {
   socialScore           Int?
 }
 
+model DiscordServer {
+  id        String   @id @default(cuid())
+  guildId   String   @unique
+  guildName String
+  creatorId String?
+  alertsOn  Boolean  @default(true)
+  channelId String?
+  addedAt   DateTime @default(now())
+}
+
 model CreatorOutreachQueue {
   id             String    @id @default(cuid())
   creatorId      String
