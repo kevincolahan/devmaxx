@@ -128,6 +128,7 @@ export default async function DashboardPage() {
           xp: creator.xp,
           level: creator.level,
           levelTitle: creator.levelTitle,
+          onboardingStep: creator.onboardingStep,
         }
       : null,
     games: (creator?.games ?? []).map((game) => ({

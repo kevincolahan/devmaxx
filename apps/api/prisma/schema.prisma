@@ -72,6 +72,8 @@ model Creator {
   referralCode         String?    @unique
   referredBy           String?
   referralCredits      Int        @default(0)
+  onboardingStep       Int        @default(0)
+  onboardingCompletedAt DateTime?
   games                Game[]
   agentRuns            AgentRun[]
   xpEvents             XPEvent[]

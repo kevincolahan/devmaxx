@@ -28,6 +28,7 @@ import { ReferralPanel } from '@/components/referral-panel';
 import { UpgradePrompt } from '@/components/upgrade-prompt';
 import { MilestoneToast } from '@/components/milestone-toast';
 import { ProspectsTab } from '@/components/prospects-tab';
+import { OnboardingFlow, OnboardingBanner } from '@/components/onboarding-flow';
 
 interface Snapshot {
   date: string;
@@ -138,6 +139,7 @@ interface DashboardData {
     xp: number;
     level: number;
     levelTitle: string;
+    onboardingStep: number;
   } | null;
   games: Game[];
   recentRuns: AgentRun[];
@@ -314,6 +316,13 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
 
   const isAdmin = userEmail === 'kevin@devmaxx.app';
 
+  // Onboarding: show if step < 5 and not dismissed
+  const shouldShowOnboarding = creator && (creator.onboardingStep ?? 0) < 5 && (
+    !creator.robloxUserId || !creator.hasApiKey || games.length === 0 || recentRuns.length < 3
+  );
+  const [showOnboarding, setShowOnboarding] = useState(shouldShowOnboarding ?? false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState(false);
+
   return (
     <div className="min-h-screen bg-[#080810]">
       {/* Milestone toast */}
@@ -324,6 +333,26 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
           xp={milestone.xp}
           levelUp={milestone.levelUp}
           onDismiss={() => setMilestone(null)}
+        />
+      )}
+
+      {/* Onboarding modal */}
+      {showOnboarding && creator && !onboardingDismissed && (
+        <OnboardingFlow
+          creatorId={creator.id}
+          currentStep={creator.onboardingStep ?? 0}
+          isRobloxConnected={!!creator.robloxUserId}
+          robloxUsername={creator.robloxUsername}
+          hasApiKey={creator.hasApiKey}
+          hasGames={games.length > 0}
+          onComplete={() => {
+            setShowOnboarding(false);
+            setOnboardingDismissed(true);
+          }}
+          onDismiss={() => {
+            setShowOnboarding(false);
+            setOnboardingDismissed(true);
+          }}
         />
       )}
 
@@ -371,6 +400,14 @@ export function DashboardClient({ data, userEmail }: DashboardClientProps) {
                 All agents are now active. Your games are being optimized.
               </p>
             </div>
+          )}
+
+          {/* Onboarding banner (if incomplete and dismissed modal) */}
+          {creator && !showOnboarding && onboardingDismissed && (creator.onboardingStep ?? 0) < 5 && (
+            <OnboardingBanner
+              step={creator.onboardingStep ?? 0}
+              onResume={() => setShowOnboarding(true)}
+            />
           )}
 
           {/* ═══════════════ OVERVIEW ═══════════════ */}
