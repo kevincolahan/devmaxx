@@ -61,45 +61,38 @@ async function callFollowApi(action: 'follow' | 'unfollow', targetUserId: string
 // ─── Twitter User ID Lookup ─────────────────────────────────
 
 async function lookupTwitterUserId(handle: string): Promise<{ userId: string; username: string } | null> {
-  // Search for tweets from this user to get their user ID
-  const query = `from:${handle}`;
-  const url = `${VERCEL_BASE}/api/twitter/search?query=${encodeURIComponent(query)}&max_results=10`;
+  const cleanHandle = handle.replace(/^@/, '').trim();
+  const url = `${VERCEL_BASE}/api/twitter/user?username=${encodeURIComponent(cleanHandle)}`;
 
   try {
     const res = await fetch(url, { headers: proxyHeaders() });
+
+    if (res.status === 404) {
+      log(`@${cleanHandle} not found on Twitter`);
+      return null;
+    }
+
     if (!res.ok) {
-      log(`User lookup for @${handle} failed: HTTP ${res.status}`);
+      const body = await res.text();
+      log(`User lookup for @${cleanHandle} failed: HTTP ${res.status} — ${body.slice(0, 200)}`);
       return null;
     }
 
     const data = (await res.json()) as {
-      tweets?: Array<{ author_id: string }>;
-      users?: Array<{ id: string; username: string }>;
+      found: boolean;
+      id?: string;
+      username?: string;
     };
 
-    // Check users array first (from expansions)
-    if (data.users && data.users.length > 0) {
-      const user = data.users.find((u) => u.username.toLowerCase() === handle.toLowerCase());
-      if (user) {
-        log(`Resolved @${handle} → user ID: ${user.id}`);
-        return { userId: user.id, username: user.username };
-      }
-      // Fall back to first user
-      log(`Resolved @${handle} → user ID: ${data.users[0].id} (first user)`);
-      return { userId: data.users[0].id, username: data.users[0].username };
+    if (!data.found || !data.id) {
+      log(`@${cleanHandle} lookup returned no ID`);
+      return null;
     }
 
-    // Fall back to author_id from tweets
-    if (data.tweets && data.tweets.length > 0) {
-      const authorId = data.tweets[0].author_id;
-      log(`Resolved @${handle} → author_id: ${authorId} (from tweet)`);
-      return { userId: authorId, username: handle };
-    }
-
-    log(`No results for @${handle} — account may be private or suspended`);
-    return null;
+    log(`Resolved @${cleanHandle} → user ID: ${data.id}`);
+    return { userId: data.id, username: data.username ?? cleanHandle };
   } catch (err) {
-    log(`User lookup error for @${handle}: ${err}`);
+    log(`User lookup error for @${cleanHandle}: ${err}`);
     return null;
   }
 }
