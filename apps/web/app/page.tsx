@@ -699,6 +699,7 @@ export default function Home() {
                 <Link href="/leaderboard" className="transition hover:text-gray-300">Leaderboard</Link>
                 <Link href="/pricing" className="transition hover:text-gray-300">Pricing</Link>
                 <Link href="/devex-calculator" className="transition hover:text-gray-300">DevEx Calculator</Link>
+                <Link href="/retention-calculator" className="transition hover:text-gray-300">Retention Calculator</Link>
                 <Link href="/privacy" className="transition hover:text-gray-300">Privacy</Link>
                 <Link href="/terms" className="transition hover:text-gray-300">Terms</Link>
                 <a href="https://x.com/devmaxxapp" target="_blank" rel="noopener noreferrer" className="transition hover:text-gray-300">@devmaxxapp</a>
