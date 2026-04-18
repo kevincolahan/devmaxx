@@ -54,18 +54,33 @@ interface ClassifiedTweet {
 
 // ─── Twitter Search (via Vercel proxy) ──────────────────────
 
+const SEARCH_QUERIES = [
+  '(roblox devex OR roblox monetization OR roblox analytics) -is:retweet -is:reply lang:en',
+  '(roblox game revenue OR roblox developer earnings OR roblox studio income) -is:retweet -is:reply lang:en',
+  '(roblox game pass OR roblox monetization tips OR roblox creator economy) -is:retweet -is:reply lang:en',
+  '(robloxdev OR roblox game launch OR roblox concurrent players) -is:retweet -is:reply lang:en',
+  '(roblox game analytics OR "roblox devex" OR "roblox earnings") -is:retweet -is:reply lang:en',
+];
+
+function pickSearchQuery(): string {
+  // Rotate based on current hour so each run gets a different query
+  const hourOfDay = new Date().getUTCHours();
+  const idx = hourOfDay % SEARCH_QUERIES.length;
+  return SEARCH_QUERIES[idx];
+}
+
 async function searchRecentTweets(): Promise<{
   tweets: SearchTweet[];
   users: SearchUser[];
 }> {
-  const query = '(roblox devex OR roblox monetization OR roblox analytics OR roblox game revenue OR roblox creator economy) -is:retweet -is:reply lang:en';
+  const query = pickSearchQuery();
 
   const params = new URLSearchParams({
     query,
     max_results: '50',
   });
 
-  console.log(`[XOutreach] Searching tweets via Vercel proxy`);
+  console.log(`[XOutreach] Searching tweets via Vercel proxy — query: "${query.slice(0, 60)}..."`);
 
   const res = await fetch(`${VERCEL_BASE}/api/twitter/search?${params}`, {
     headers: proxyHeaders(),

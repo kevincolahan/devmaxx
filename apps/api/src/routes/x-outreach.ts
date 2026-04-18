@@ -26,3 +26,24 @@ xOutreachRouter.post('/', async (_req, res) => {
     res.status(500).json({ error: 'Agent run failed', details: String(err) });
   }
 });
+
+// Reset: clear old XOutreachLog entries to allow fresh runs
+xOutreachRouter.post('/reset', async (_req, res) => {
+  try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const deleted = await db.xOutreachLog.deleteMany({
+      where: { createdAt: { lt: sevenDaysAgo } },
+    });
+
+    console.log(`[XOutreach] Reset — deleted ${deleted.count} log entries older than 7 days`);
+
+    res.json({
+      success: true,
+      deletedCount: deleted.count,
+      message: `Cleared ${deleted.count} outreach log entries older than 7 days`,
+    });
+  } catch (err) {
+    console.error('XOutreach reset failed:', err);
+    res.status(500).json({ error: 'Reset failed', details: String(err) });
+  }
+});
