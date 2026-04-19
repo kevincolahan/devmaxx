@@ -279,9 +279,9 @@ Respond ONLY with valid JSON in this exact format:
   ): Promise<AgentResult> {
     const STEP_TIMEOUT = 15_000; // 15s per external call
 
-    // Step 1: Refresh access token
+    // Step 1: Refresh access token (non-fatal — public API fallback available)
     log(`Step 1: Refreshing access token for creator ${creatorId}...`);
-    let accessToken: string;
+    let accessToken = '';
     try {
       accessToken = await withStepTimeout(
         refreshAccessToken(creatorId, db),
@@ -290,14 +290,8 @@ Respond ONLY with valid JSON in this exact format:
       );
       log(`Step 1: Token refreshed (${accessToken.length} chars)`);
     } catch (err) {
-      log(`Step 1: FAILED — ${err}`);
-      const failed: AgentResult = {
-        action: 'token_refresh_failed',
-        output: { error: String(err), step: 'refreshAccessToken' },
-        status: 'failed',
-      };
-      await this.logRunSafe(creatorId, gameId, failed, db);
-      return failed;
+      log(`Step 1: Token refresh failed (${err}) — will use public API fallback`);
+      // Continue — fetchGameAnalytics has a public API fallback
     }
 
     // Step 2: Get game genre for benchmarks
