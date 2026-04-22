@@ -149,48 +149,17 @@ export class MetricsMonitorAgent extends BaseAgent {
   }
 
   buildSystemPrompt(_ctx: AgentContext): string {
-    return `You are a Roblox game analytics expert working for Devmaxx, an AI platform that maximizes DevEx earnings for Roblox creators.
-
-You analyze 7-day metric snapshots, compare them against prior period averages, AND benchmark against genre averages and top-tier thresholds.
-
-Your job:
-
-1. Identify anomalies — any metric that changed more than 15% from prior period
-2. Explain WHY each anomaly likely occurred (seasonal, update, competitor, viral moment, etc.)
-3. Compare every key metric against genre benchmarks:
-   - Show: "Your score" vs "Genre average" vs "Top 10% threshold"
-   - Give a clear verdict: "above average", "below average", "top-tier", "needs work"
-   - Example: "Your D7 retention (35%) is above the genre average (28%) but below top 10% (52%) — strong but room to reach top-tier."
-4. Provide 2-3 actionable recommendations that specifically reference the benchmark gaps
-5. Calculate a health score from 0-100 using this formula:
-   - Retention weight: 40% (average of D1, D7, D30 normalized to 0-100)
-   - DAU trend weight: 30% (positive trend = higher score)
-   - Revenue trend weight: 30% (positive trend = higher score)
-
-Respond ONLY with valid JSON in this exact format:
+    return `You analyze Roblox game metrics. Be concise. Respond ONLY with valid JSON:
 {
-  "summary": "One paragraph trend summary with benchmark context",
-  "anomalies": [
-    {
-      "metric": "metric_name",
-      "current": 1234,
-      "previous": 1000,
-      "changePercent": 23.4,
-      "direction": "up"
-    }
-  ],
-  "benchmarks": [
-    {
-      "metric": "D7 Retention",
-      "yours": 0.35,
-      "genreAvg": 0.28,
-      "top10Pct": 0.52,
-      "verdict": "Above average — 7pp above genre average but 17pp below top 10%. Focus on onboarding flow to close the gap."
-    }
-  ],
   "healthScore": 72,
-  "recommendations": ["rec1 referencing specific benchmark gaps", "rec2", "rec3"]
-}`;
+  "insights": ["DAU up 12% — weekend spike held", "D7 retention dropped 3%", "Revenue stable"],
+  "recommendation": "Focus on day-3 engagement hooks to improve D7 retention"
+}
+
+Rules:
+- healthScore: 0-100 based on retention (40%), DAU trend (30%), revenue trend (30%)
+- insights: max 3 bullet points, each under 80 chars
+- recommendation: single most important action, under 120 chars`;
   }
 
   buildUserPrompt(ctx: AgentContext): string {
@@ -202,24 +171,18 @@ Respond ONLY with valid JSON in this exact format:
       benchmarks: GenreBenchmarks;
     };
 
-    let prompt = `Analyze the following 7-day metrics for "${input.gameName}" (genre: ${input.genre.join(', ') || 'unknown'}):\n\n`;
-    prompt += `CURRENT PERIOD:\n${JSON.stringify(input.currentMetrics, null, 2)}\n\n`;
+    const current = input.currentMetrics as any;
+    const prior = input.priorMetrics as any;
+    const b = input.benchmarks;
 
-    if (input.priorMetrics) {
-      prompt += `PRIOR PERIOD (previous 7 days):\n${JSON.stringify(input.priorMetrics, null, 2)}\n\n`;
-    } else {
-      prompt += `PRIOR PERIOD: No prior data available. This is the first snapshot.\n\n`;
+    let prompt = `Game: "${input.gameName}" (${input.genre[0] || 'unknown'})\n`;
+    prompt += `Current: DAU=${current.dau}, D7=${current.retentionD7}, Revenue=${current.robuxEarned}R$, Concurrent=${current.concurrentPeak}\n`;
+
+    if (prior) {
+      prompt += `Prior: DAU=${prior.dau}, D7=${prior.retentionD7}, Revenue=${prior.robuxEarned}R$\n`;
     }
 
-    prompt += `GENRE BENCHMARKS (${input.genre[0] || 'default'}):\n`;
-    prompt += `  D1 Retention — genre avg: ${(input.benchmarks.retentionD1.avg * 100).toFixed(0)}%, top 10%: ${(input.benchmarks.retentionD1.top10 * 100).toFixed(0)}%\n`;
-    prompt += `  D7 Retention — genre avg: ${(input.benchmarks.retentionD7.avg * 100).toFixed(0)}%, top 10%: ${(input.benchmarks.retentionD7.top10 * 100).toFixed(0)}%\n`;
-    prompt += `  D30 Retention — genre avg: ${(input.benchmarks.retentionD30.avg * 100).toFixed(0)}%, top 10%: ${(input.benchmarks.retentionD30.top10 * 100).toFixed(0)}%\n`;
-    prompt += `  Avg Session — genre avg: ${input.benchmarks.avgSessionSec.avg}s, top 10%: ${input.benchmarks.avgSessionSec.top10}s\n`;
-    prompt += `  DAU/MAU Ratio — genre avg: ${(input.benchmarks.dauToMau.avg * 100).toFixed(0)}%, top 10%: ${(input.benchmarks.dauToMau.top10 * 100).toFixed(0)}%\n`;
-    prompt += `  Robux/DAU — genre avg: ${input.benchmarks.robuxPerDau.avg}, top 10%: ${input.benchmarks.robuxPerDau.top10}\n\n`;
-
-    prompt += `Compare each metric against genre benchmarks. Identify anomalies (>15% change) and provide recommendations that reference specific benchmark gaps.`;
+    prompt += `Genre avg: D7=${(b.retentionD7.avg * 100).toFixed(0)}%, top10=${(b.retentionD7.top10 * 100).toFixed(0)}%`;
     return prompt;
   }
 
@@ -229,11 +192,11 @@ Respond ONLY with valid JSON in this exact format:
       .map((block) => block.text)
       .join('');
 
-    let analysis: AnalysisOutput;
+    let parsed: { healthScore?: number; insights?: string[]; recommendation?: string };
     try {
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (!jsonMatch) throw new Error('No JSON found in response');
-      analysis = JSON.parse(jsonMatch[0]) as AnalysisOutput;
+      parsed = JSON.parse(jsonMatch[0]);
     } catch {
       return {
         action: 'analysis_failed',
@@ -242,20 +205,19 @@ Respond ONLY with valid JSON in this exact format:
       };
     }
 
-    const robuxImpact = analysis.anomalies
-      .filter((a) => a.metric.toLowerCase().includes('robux') || a.metric.toLowerCase().includes('revenue'))
-      .reduce((sum, a) => sum + Math.round(a.current - a.previous), 0);
-
     return {
-      action: analysis.anomalies.length > 0 ? 'anomalies_detected' : 'metrics_normal',
+      action: 'metrics_analyzed',
       output: {
-        summary: analysis.summary,
-        anomalies: analysis.anomalies,
-        benchmarks: analysis.benchmarks ?? [],
-        healthScore: Math.max(0, Math.min(100, analysis.healthScore)),
-        recommendations: analysis.recommendations,
+        healthScore: Math.max(0, Math.min(100, parsed.healthScore ?? 50)),
+        insights: parsed.insights ?? [],
+        recommendation: parsed.recommendation ?? '',
+        // Keep legacy fields for compatibility
+        summary: (parsed.insights ?? []).join('. '),
+        anomalies: [],
+        benchmarks: [],
+        recommendations: parsed.recommendation ? [parsed.recommendation] : [],
       },
-      robuxImpact,
+      robuxImpact: 0,
       status: 'success',
     };
   }
@@ -263,12 +225,48 @@ Respond ONLY with valid JSON in this exact format:
   async executeActions(result: AgentResult, ctx: AgentContext): Promise<void> {
     if (!ctx.gameId) return;
 
-    const output = result.output as unknown as AnalysisOutput;
+    const output = result.output as Record<string, unknown>;
+    const healthScore = typeof output.healthScore === 'number' ? output.healthScore : 50;
 
     await ctx.db.game.update({
       where: { id: ctx.gameId },
-      data: { healthScore: output.healthScore },
+      data: { healthScore },
     });
+  }
+
+  private calcFallbackHealthScore(
+    current: { dau: number; retentionD7: number; robuxEarned: number },
+    prior: Record<string, unknown> | null,
+    benchmarks: GenreBenchmarks
+  ): number {
+    let score = 50;
+
+    // DAU trend: +10 if up, -10 if down
+    if (prior) {
+      const priorDau = Number((prior as any).dau ?? 0);
+      if (priorDau > 0) {
+        if (current.dau > priorDau) score += 10;
+        else if (current.dau < priorDau) score -= 10;
+      }
+    }
+
+    // D7 retention vs genre average
+    if (current.retentionD7 > benchmarks.retentionD7.avg) {
+      score += 10;
+    } else if (current.retentionD7 < benchmarks.retentionD7.avg * 0.5) {
+      score -= 10;
+    }
+
+    // Revenue trend
+    if (prior) {
+      const priorRevenue = Number((prior as any).robuxEarned ?? 0);
+      if (priorRevenue > 0) {
+        if (current.robuxEarned > priorRevenue) score += 10;
+        else if (current.robuxEarned < priorRevenue) score -= 10;
+      }
+    }
+
+    return Math.max(0, Math.min(100, score));
   }
 
   async runFullPipeline(
@@ -374,7 +372,7 @@ Respond ONLY with valid JSON in this exact format:
       // First run or API timeout — not a fatal error
     }
 
-    // Step 6: Run Claude analysis
+    // Step 6: Run Claude analysis (45s timeout, fallback on failure)
     log(`Step 6: Running Claude analysis...`);
     const context: AgentContext = {
       creatorId,
@@ -392,20 +390,45 @@ Respond ONLY with valid JSON in this exact format:
     try {
       const result = await withStepTimeout(
         this.run(context),
-        20_000, // 20s for Claude
+        45_000, // 45s for Claude
         'Claude analysis'
       );
       log(`Step 6: Analysis complete — health score: ${(result.output as any)?.healthScore ?? 'unknown'}`);
       return result;
     } catch (err) {
-      log(`Step 6: FAILED — ${err}`);
-      const failed: AgentResult = {
-        action: 'analysis_timeout',
-        output: { error: String(err), step: 'claudeAnalysis' },
-        status: 'failed',
+      log(`Step 6: Claude analysis failed (${err}) — using fallback health score`);
+
+      // Calculate fallback health score from raw metrics
+      const fallbackScore = this.calcFallbackHealthScore(currentMetrics, priorMetrics, benchmarks);
+      log(`Step 6: Fallback health score: ${fallbackScore}`);
+
+      // Update game health score even without Claude
+      try {
+        await db.game.update({
+          where: { id: gameId },
+          data: { healthScore: fallbackScore },
+        });
+      } catch {
+        // Non-fatal
+      }
+
+      const fallbackResult: AgentResult = {
+        action: 'metrics_analyzed_fallback',
+        output: {
+          healthScore: fallbackScore,
+          insights: ['Analysis pending — will retry next run'],
+          recommendation: '',
+          summary: 'Metrics collected. AI analysis timed out — will retry.',
+          anomalies: [],
+          benchmarks: [],
+          recommendations: [],
+        },
+        robuxImpact: 0,
+        status: 'success', // Mark success — snapshot was saved
       };
-      await this.logRunSafe(creatorId, gameId, failed, db);
-      return failed;
+
+      await this.logRunSafe(creatorId, gameId, fallbackResult, db);
+      return fallbackResult;
     }
   }
 
